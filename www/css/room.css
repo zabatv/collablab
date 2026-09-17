@@ -756,6 +756,183 @@ footer {
   flex-shrink: 0;
 }
 
+/* ───── Canvas ───── */
+.canvas-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  position: relative;
+  overflow: hidden;
+}
+
+.canvas-grid {
+  flex: 1;
+  position: relative;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: 0 0;
+  cursor: default;
+  user-select: none;
+  overflow: auto;
+}
+
+.canvas-item {
+  position: absolute;
+  min-width: 60px;
+  min-height: 60px;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px;
+  cursor: move;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: box-shadow var(--transition);
+  user-select: none;
+}
+
+.canvas-item:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  border-color: var(--border2);
+}
+
+.canvas-item.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(108, 140, 255, 0.3), 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.canvas-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--fg);
+  cursor: grab;
+}
+
+.canvas-item-header:active {
+  cursor: grabbing;
+}
+
+.canvas-item-peer {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.canvas-item-resize {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  opacity: 0;
+  cursor: nwse-resize;
+  transition: opacity var(--transition);
+}
+
+.canvas-item:hover .canvas-item-resize {
+  opacity: 0.6;
+}
+
+.canvas-item.is-folder {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 12px;
+  background: rgba(108, 140, 255, 0.08);
+  border: 1px dashed var(--accent);
+  align-content: start;
+}
+
+.canvas-item.is-folder .canvas-item-header {
+  grid-column: 1 / -1;
+  cursor: default;
+  margin-bottom: 4px;
+}
+
+.canvas-item.is-folder .canvas-item-resize {
+  display: none;
+}
+
+.canvas-item.is-file {
+  max-width: 200px;
+  max-height: 240px;
+}
+
+.canvas-item-content {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  max-height: 160px;
+  background: var(--panel3);
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.canvas-peer-window {
+  position: absolute;
+  border: 2px solid;
+  background: transparent;
+  opacity: 0.3;
+  pointer-events: none;
+  border-radius: 0;
+}
+
+.canvas-peer-label {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: var(--panel2);
+  color: var(--fg);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid;
+  border-radius: 0;
+}
+
+.canvas-menu {
+  position: fixed;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+}
+
+.canvas-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.canvas-menu button:hover {
+  background: rgba(108, 140, 255, 0.12);
+  transform: none;
+  color: var(--accent);
+}
+
 /* Адаптивность */
 @media (max-width: 1024px) {
   .park {

@@ -122,7 +122,8 @@ class App:
             "peers": len(room.peers),
             "name": peer.name,
             "names": self.peer_names(room, peer),
-            "chat": room.msgs[-Config.CHAT_HISTORY:]
+            "chat": room.msgs[-Config.CHAT_HISTORY:],
+            "canvas": room.canvas
         })
         for other in room.peers:
             if other is not peer:
@@ -209,6 +210,14 @@ class App:
             self.broadcast(room, None, {"type": "peerf", "file": None})
         peer.room = None
 
+    async def _ws_canvas_update(self, peer, msg):
+        room = peer.room
+        if not room:
+            return
+        if msg.get("items"):
+            room.canvas = msg.get("items", {})
+            self.broadcast(room, peer, {"type": "canvas-update", "items": room.canvas})
+
 
 WS_ROUTES = {
     "join": App._ws_join,
@@ -218,6 +227,7 @@ WS_ROUTES = {
     "fsel": App._ws_fsel,
     "compile": App._ws_compile,
     "chat": App._ws_chat,
+    "canvas-update": App._ws_canvas_update,
 }
 
 

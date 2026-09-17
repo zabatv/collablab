@@ -49,6 +49,7 @@
 
 <div id="layout">
 <nav id="sidebar">
+  <button class="stab" data-tab="canvas" title="Canvas"><svg><use href="#i-brush"/></svg><span class="label">Canvas</span></button>
   <button class="stab on" data-tab="editor" title="Редактор"><svg><use href="#i-ed"/></svg><span class="label">Редактор</span></button>
   <button class="stab" data-tab="files" title="Файлы"><svg><use href="#i-files"/></svg><span class="label">Файлы</span></button>
   <button class="stab" data-tab="ai" title="AI-ассистент"><svg><use href="#i-ai"/></svg><span class="label">AI</span></button>
@@ -56,6 +57,16 @@
 </nav>
 
 <div id="content">
+<div id="tab-canvas" class="tab-panel">
+  <div id="canvas-container" class="canvas-container">
+    <div id="canvas-grid" class="canvas-grid"></div>
+    <div id="canvas-menu" class="canvas-menu" style="display:none">
+      <button id="canvas-create-file">Создать файл</button>
+      <button id="canvas-create-folder">Создать папку</button>
+    </div>
+  </div>
+</div>
+
 <main id="tab-editor" class="tab-panel on">
   <div class="park">
     <div class="panel">

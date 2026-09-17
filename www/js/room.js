@@ -90,6 +90,10 @@ function handle(m) {
     setStatus(true); setPeers(m.peers);
     myName = m.name || ''; peerNames = m.names || []; namesUI();
     initChat(m.chat);
+    if (m.canvas && Object.keys(m.canvas).length) {
+      canvas.items = m.canvas;
+      canvas.render();
+    }
     if (m.kind && m.kind !== kind) {
       location.href = '/room.html?name=' + encodeURIComponent(roomName) + '&kind=' + m.kind;
     }
@@ -106,6 +110,12 @@ function handle(m) {
   if (m.type === 'files') { fileRefresh(); }
   if (m.type === 'run') { renderRun(m.result); }
   if (m.type === 'chat') { addChatMsg(m); }
+  if (m.type === 'canvas-update') {
+    if (m.items) {
+      canvas.items = m.items;
+      canvas.render();
+    }
+  }
 }
 
 function setStatus(on) { $('cdot').classList.toggle('on', on); }
@@ -525,5 +535,163 @@ $('foot').textContent = kind === 'csharp'
 if (kind === 'xml') compileXML();
 else if (kind === 'html') updatePreview();
 else verdict('нажми «Выполнить»', 'neutral');
+
+// Canvas mode
+const canvas = {
+  items: {},
+  dragging: null,
+  resizing: null,
+  offset: { x: 0, y: 0 },
+  grid: $('canvas-grid'),
+  menu: $('canvas-menu'),
+
+  load() {
+    const stored = localStorage.getItem('canvas-' + roomName);
+    if (stored) this.items = JSON.parse(stored);
+    this.render();
+  },
+
+  save() {
+    localStorage.setItem('canvas-' + roomName, JSON.stringify(this.items));
+    this.broadcast('canvas-update', { items: this.items });
+  },
+
+  render() {
+    this.grid.innerHTML = '';
+    for (const [id, item] of Object.entries(this.items)) {
+      if (item.peer && item.peer !== myName) continue;
+      const el = document.createElement('div');
+      el.className = 'canvas-item' + (item.type === 'folder' ? ' is-folder' : ' is-file');
+      el.id = 'ci-' + id;
+      el.style.left = item.x + 'px';
+      el.style.top = item.y + 'px';
+      el.style.width = item.w + 'px';
+      if (item.type === 'file') el.style.height = item.h + 'px';
+
+      const header = document.createElement('div');
+      header.className = 'canvas-item-header';
+      header.textContent = item.name;
+      if (item.peer) {
+        const peer = document.createElement('div');
+        peer.className = 'canvas-item-peer';
+        peer.textContent = item.peer;
+        header.appendChild(peer);
+      }
+      el.appendChild(header);
+
+      if (item.type === 'file' && item.content) {
+        const content = document.createElement('div');
+        content.className = 'canvas-item-content';
+        content.textContent = item.content.slice(0, 200);
+        el.appendChild(content);
+      }
+
+      if (item.type === 'file' && !item.peer) {
+        const resize = document.createElement('div');
+        resize.className = 'canvas-item-resize';
+        el.appendChild(resize);
+      }
+
+      el.addEventListener('mousedown', e => this.onMouseDown(e, id));
+      this.grid.appendChild(el);
+    }
+  },
+
+  onMouseDown(e, id) {
+    if (e.button !== 0) return;
+    if (e.target.classList.contains('canvas-item-resize')) {
+      this.resizing = id;
+      this.offset = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+    } else {
+      this.dragging = id;
+      const el = $('ci-' + id);
+      this.offset = { x: e.clientX - el.offsetLeft, y: e.clientY - el.offsetTop };
+      e.preventDefault();
+    }
+  },
+
+  onContextMenu(e) {
+    e.preventDefault();
+    const rect = this.grid.getBoundingClientRect();
+    const x = e.clientX - rect.left + this.grid.scrollLeft;
+    const y = e.clientY - rect.top + this.grid.scrollTop;
+    this.menu.style.display = 'block';
+    this.menu.style.left = e.clientX + 'px';
+    this.menu.style.top = e.clientY + 'px';
+    this.pendingPos = { x: Math.round(x / 40) * 40, y: Math.round(y / 40) * 40 };
+  },
+
+  createFile() {
+    const name = prompt('Имя файла:');
+    if (!name) return;
+    const id = Date.now().toString();
+    this.items[id] = {
+      id, type: 'file', name,
+      x: this.pendingPos.x, y: this.pendingPos.y,
+      w: 180, h: 140, content: '',
+      peer: myName
+    };
+    this.save();
+    this.render();
+  },
+
+  createFolder() {
+    const name = prompt('Имя папки:');
+    if (!name) return;
+    const id = Date.now().toString();
+    this.items[id] = {
+      id, type: 'folder', name,
+      x: this.pendingPos.x, y: this.pendingPos.y,
+      peer: myName
+    };
+    this.save();
+    this.render();
+  },
+
+  broadcast(type, data) {
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type, ...data }));
+  },
+
+  init() {
+    this.load();
+    this.grid.addEventListener('contextmenu', e => this.onContextMenu(e));
+    this.grid.addEventListener('click', () => { this.menu.style.display = 'none'; });
+    document.addEventListener('mousemove', e => {
+      if (!this.dragging && !this.resizing) return;
+      const el = $('ci-' + (this.dragging || this.resizing));
+      if (!el) return;
+      if (this.dragging) {
+        el.style.left = Math.max(0, e.clientX - this.grid.getBoundingClientRect().left - this.offset.x + this.grid.scrollLeft) + 'px';
+        el.style.top = Math.max(0, e.clientY - this.grid.getBoundingClientRect().top - this.offset.y + this.grid.scrollTop) + 'px';
+      } else if (this.resizing) {
+        const dx = e.clientX - this.offset.x;
+        const dy = e.clientY - this.offset.y;
+        el.style.width = Math.max(60, parseInt(el.style.width) + dx) + 'px';
+        el.style.height = Math.max(60, parseInt(el.style.height) + dy) + 'px';
+        this.offset = { x: e.clientX, y: e.clientY };
+      }
+    });
+    document.addEventListener('mouseup', () => {
+      if (this.dragging || this.resizing) {
+        const id = this.dragging || this.resizing;
+        const el = $('ci-' + id);
+        if (el && this.items[id]) {
+          this.items[id].x = parseInt(el.style.left) || 0;
+          this.items[id].y = parseInt(el.style.top) || 0;
+          this.items[id].w = parseInt(el.style.width) || 180;
+          this.items[id].h = parseInt(el.style.height) || 140;
+          this.save();
+        }
+        this.dragging = null;
+        this.resizing = null;
+      }
+    });
+  }
+};
+
+canvas.init();
+$('canvas-create-file').addEventListener('click', () => canvas.createFile());
+$('canvas-create-folder').addEventListener('click', () => canvas.createFolder());
 
 connect();

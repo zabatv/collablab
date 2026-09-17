@@ -34,6 +34,7 @@ class Room:
         self.peers = set()
         self.doc = ""
         self.msgs = []
+        self.canvas = {}
         self.created = time.time()
         self.updated = time.time()
         self.compiling = False
