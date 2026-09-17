@@ -1088,12 +1088,6 @@ def seo_technical():
         {'key': 'og', 'title': 'Теги для соцсетей (Open Graph)',
          'ok': every_page_has('property="og:'),
          'why': 'Картинка и заголовок при отправке ссылки в мессенджер'},
-        {'key': 'schema', 'title': 'Микроразметка товара (Schema.org)',
-         'ok': 'schema.org' in (pages.get('product.html') or ''),
-         'why': 'Показывает цену и наличие прямо в результатах поиска'},
-        {'key': 'canonical', 'title': 'Канонический адрес',
-         'ok': every_page_has('rel="canonical"'),
-         'why': 'Склеивает адреса с параметрами, чтобы не плодить дубли'},
         {'key': 'unique_titles', 'title': 'Уникальные заголовки товаров',
          'ok': 'id="page-title"' in (pages.get('product.html') or ''),
          'why': 'Сейчас у всех карточек один заголовок «Товар - ROBOT»'},
@@ -1148,42 +1142,6 @@ def seo_traffic():
         'empty_searches': [{'query': q, 'count': count}
                            for q, count, results in searches if not results][:10]
     })
-
-@app.route('/api/admin/seo/sitemap', methods=['POST'])
-@require_admin
-def generate_sitemap():
-    """Write sitemap.xml and robots.txt next to the pages they describe"""
-    data = request.get_json(silent=True) or {}
-    base = str(data.get('base_url', '')).strip().rstrip('/')
-
-    if not base.startswith(('http://', 'https://')):
-        return jsonify({'error': 'Укажите адрес сайта, например https://example.ru'}), 400
-
-    frontend = os.path.join(BASE_DIR, '..', 'frontend')
-    today = datetime.utcnow().strftime('%Y-%m-%d')
-
-    urls = [f'{base}/', f'{base}/catalog.html']
-    urls += [f'{base}/catalog.html?category={c.id}' for c in Category.query.all()]
-    urls += [f'{base}/product.html?id={p.id}'
-             for p in Product.query.filter_by(is_active=True).all()]
-
-    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
-             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
-    for url in urls:
-        escaped = url.replace('&', '&amp;')
-        lines.append(f'  <url><loc>{escaped}</loc><lastmod>{today}</lastmod></url>')
-    lines.append('</urlset>')
-
-    with open(os.path.join(frontend, 'sitemap.xml'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(lines))
-
-    with open(os.path.join(frontend, 'robots.txt'), 'w', encoding='utf-8') as f:
-        f.write('User-agent: *\n'
-                'Disallow: /admin.html\n'
-                'Disallow: /login.html\n'
-                f'\nSitemap: {base}/sitemap.xml\n')
-
-    return jsonify({'urls': len(urls), 'message': f'Создано: sitemap.xml ({len(urls)} адресов) и robots.txt'})
 
 # ===== HEALTH CHECK =====
 

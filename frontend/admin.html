@@ -459,21 +459,6 @@
       color: var(--color-gray-dark);
     }
 
-    .seo-sitemap {
-      margin-top: 24px;
-      padding: 16px;
-      border: 1px solid var(--color-border);
-      border-radius: 6px;
-      background: #fafafa;
-      max-width: 560px;
-    }
-
-    .seo-sitemap label {
-      display: block;
-      font-size: 13px;
-      font-weight: 600;
-    }
-
     .seo-table {
       margin-bottom: 24px;
     }
@@ -693,15 +678,6 @@
 
         <h3 class="seo-heading">ТЕХНИЧЕСКОЕ СОСТОЯНИЕ САЙТА</h3>
         <div id="seo-technical" class="loading">Загрузка...</div>
-
-        <div class="seo-sitemap">
-          <label for="seo-base-url">Адрес сайта</label>
-          <div class="upload-url-row">
-            <input type="text" id="seo-base-url" placeholder="https://example.ru">
-            <button type="button" class="btn btn-primary" onclick="buildSitemap()">СОЗДАТЬ КАРТУ САЙТА</button>
-          </div>
-          <small class="text-muted">Создаст sitemap.xml и robots.txt в папке сайта</small>
-        </div>
 
         <h3 class="seo-heading">ПОСЕЩАЕМОСТЬ ЗА 30 ДНЕЙ</h3>
         <div id="seo-traffic" class="loading">Загрузка...</div>
@@ -1089,21 +1065,6 @@
       return block;
     }
 
-    async function buildSitemap() {
-      const baseUrl = el('#seo-base-url').value.trim();
-      if (!baseUrl) {
-        showNotification('Укажите адрес сайта', 'error');
-        return;
-      }
-
-      try {
-        const result = await AdminAPI.buildSitemap(baseUrl);
-        showNotification(result.message);
-        loadSeoTechnical();
-      } catch (error) {
-        showNotification('Не удалось создать карту сайта: ' + error.message, 'error');
-      }
-    }
 
     // Products
     async function loadProducts(page = 1) {

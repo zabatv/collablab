@@ -229,12 +229,6 @@ const AdminAPI = {
 
   seoTraffic: (days = 30) => apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
 
-  buildSitemap: (baseUrl) => apiCall('/admin/seo/sitemap', {
-    method: 'POST',
-    headers: authHeader(),
-    body: { base_url: baseUrl }
-  }),
-
   getBrands: () => {
     const headers = authHeader();
     return apiCall('/admin/brands', { headers });
