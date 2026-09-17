@@ -22,12 +22,14 @@
           <span onclick="window.location.href='index.html'" style="cursor: pointer;">ROBOT</span>
         </div>
 
-        <div class="search-bar">
+        <div class="search-bar" id="search-bar">
           <input
             type="text"
             id="search-input"
-            placeholder="Поиск товаров..."
-            onkeyup="handleSearch()">
+            placeholder="Поиск по названию или артикулу"
+            autocomplete="off">
+          <button type="button" class="search-clear" onclick="clearSearch()" title="Очистить">&times;</button>
+          <button type="button" class="search-submit" onclick="handleSearch()">НАЙТИ</button>
         </div>
 
         <div class="header-nav">
@@ -347,6 +349,8 @@
     }
 
     // Initialize
+    initSearchBar({ onSearch: handleSearch });
+
     loadProduct();
   </script>
 </body>

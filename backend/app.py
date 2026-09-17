@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from models import db, Product, Category, Brand, ProductImage, ProductVideo, Specification
 from werkzeug.utils import secure_filename
 import os
@@ -30,6 +32,14 @@ os.makedirs(os.path.join(BASE_DIR, 'data'), exist_ok=True)
 
 # Initialize database
 db.init_app(app)
+
+@event.listens_for(Engine, 'connect')
+def register_unicode_lower(dbapi_connection, connection_record):
+    """SQLite folds case for ASCII only, so a search for "ТРОЙНИК" would miss
+    "тройник". Replacing lower() with Python's makes every ilike Unicode-aware."""
+    if hasattr(dbapi_connection, 'create_function'):
+        dbapi_connection.create_function(
+            'lower', 1, lambda value: value.lower() if isinstance(value, str) else value)
 
 # Admin authentication (простая защита)
 ADMIN_KEY = os.getenv('ADMIN_KEY', 'admin_secret_key_2024')
@@ -189,9 +199,12 @@ def get_products():
 
     if search:
         query = query.filter(
+            (Product.sku.ilike(f'%{search}%')) |
             (Product.name.ilike(f'%{search}%')) |
             (Product.description.ilike(f'%{search}%'))
         )
+        # An exact article number is the one result the customer asked for
+        query = query.order_by((Product.sku.ilike(search)).desc())
 
     # Sorting
     if sort == 'price_asc':

@@ -96,6 +96,47 @@ function showNotification(message, type = 'success') {
   }, 3000);
 }
 
+let searchClearHandler = null;
+
+// Shared behaviour of the header search box across pages
+function initSearchBar({ onSearch, onClear, live = false, delay = 400 }) {
+  const input = el('#search-input');
+  const bar = el('#search-bar');
+  if (!input || !bar) return;
+
+  searchClearHandler = onClear;
+  let timer;
+  const syncClearButton = () => bar.classList.toggle('has-text', input.value.length > 0);
+
+  input.addEventListener('input', () => {
+    syncClearButton();
+    if (!live) return;
+    // Wait for a pause in typing instead of querying on every keystroke
+    clearTimeout(timer);
+    timer = setTimeout(onSearch, delay);
+  });
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      clearTimeout(timer);
+      onSearch();
+    }
+  });
+
+  syncClearButton();
+}
+
+function clearSearch() {
+  const input = el('#search-input');
+  if (!input) return;
+
+  input.value = '';
+  el('#search-bar').classList.remove('has-text');
+  input.focus();
+  if (searchClearHandler) searchClearHandler();
+}
+
 // Add styles for animations
 const style = document.createElement('style');
 style.textContent = `

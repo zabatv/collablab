@@ -22,12 +22,14 @@
           <span onclick="window.location.href='index.html'" style="cursor: pointer;">ROBOT</span>
         </div>
 
-        <div class="search-bar">
+        <div class="search-bar" id="search-bar">
           <input
             type="text"
             id="search-input"
-            placeholder="Поиск товаров..."
-            onkeyup="handleSearch()">
+            placeholder="Поиск по названию или артикулу"
+            autocomplete="off">
+          <button type="button" class="search-clear" onclick="clearSearch()" title="Очистить">&times;</button>
+          <button type="button" class="search-submit" onclick="handleSearch()">НАЙТИ</button>
         </div>
 
         <div class="header-nav">
@@ -190,6 +192,12 @@
         per_page: 12
       };
 
+      // The input holds the search term, so picking a filter cannot drop it
+      const query = el('#search-input').value.trim();
+      if (query.length >= 2) {
+        currentFilters.search = query;
+      }
+
       if (selectedCategories.length === 1) {
         currentFilters.category_id = selectedCategories[0].value;
       }
@@ -270,20 +278,21 @@
     }
 
     async function handleSearch() {
-      const query = el('#search-input').value.trim();
-      if (query.length >= 2) {
-        currentFilters.search = query;
-        currentFilters.page = 1;
-        loadProducts();
-      } else if (query.length === 0) {
-        delete currentFilters.search;
-        loadProducts();
-      }
+      applyFilters();
     }
 
     // Initialize
-    loadFilters();
-    applyFilters();
+    initSearchBar({ onSearch: handleSearch, onClear: handleSearch });
+
+    // A search started from another page arrives in the address
+    const searchParam = new URLSearchParams(window.location.search).get('search');
+    if (searchParam) {
+      el('#search-input').value = searchParam;
+      el('#search-bar').classList.add('has-text');
+    }
+
+    // Filters must exist before they are read, or a category from the address is lost
+    loadFilters().then(applyFilters);
   </script>
 </body>
 </html>

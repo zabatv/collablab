@@ -22,12 +22,14 @@
           <span>ROBOT</span>
         </div>
 
-        <div class="search-bar">
+        <div class="search-bar" id="search-bar">
           <input
             type="text"
             id="search-input"
-            placeholder="Поиск товаров..."
-            onkeyup="handleSearch()">
+            placeholder="Поиск по названию или артикулу"
+            autocomplete="off">
+          <button type="button" class="search-clear" onclick="clearSearch()" title="Очистить">&times;</button>
+          <button type="button" class="search-submit" onclick="handleSearch()">НАЙТИ</button>
         </div>
 
         <div class="header-nav">
@@ -39,6 +41,15 @@
       </div>
     </div>
   </header>
+
+  <!-- Categories Bar -->
+  <nav class="category-bar">
+    <div class="container">
+      <div class="category-bar-list" id="category-bar">
+        <span class="category-bar-loading">Загрузка категорий...</span>
+      </div>
+    </div>
+  </nav>
 
   <!-- Hero Section -->
   <section class="hero">
@@ -128,8 +139,13 @@
           productsGrid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
         }
 
-        // Load categories
+        // Categories come straight from the database, so a category created by
+        // adding or importing a product shows up here without touching the code
         const categories = await ProductAPI.getCategories();
+        categories.sort((a, b) => b.product_count - a.product_count);
+
+        renderCategoryBar(categories);
+
         const categoriesGrid = el('#categories-grid');
         clear(categoriesGrid);
 
@@ -144,6 +160,42 @@
       } catch (error) {
         console.error('Error loading content:', error);
       }
+    }
+
+    function renderCategoryBar(categories) {
+      const bar = el('#category-bar');
+      clear(bar);
+
+      const all = document.createElement('a');
+      all.className = 'category-bar-item category-bar-item-all';
+      all.href = 'catalog.html';
+      all.textContent = 'ВСЕ ТОВАРЫ';
+      bar.appendChild(all);
+
+      if (categories.length === 0) {
+        const hint = document.createElement('span');
+        hint.className = 'category-bar-loading';
+        hint.textContent = 'Категории появятся после добавления товаров';
+        bar.appendChild(hint);
+        return;
+      }
+
+      categories.forEach(category => {
+        const link = document.createElement('a');
+        link.className = 'category-bar-item';
+        link.href = `catalog.html?category=${category.id}`;
+
+        const name = document.createElement('span');
+        name.textContent = category.name;
+        link.appendChild(name);
+
+        const count = document.createElement('span');
+        count.className = 'category-bar-count';
+        count.textContent = category.product_count;
+        link.appendChild(count);
+
+        bar.appendChild(link);
+      });
     }
 
     // Handle search
@@ -173,6 +225,12 @@
         console.error('Search error:', error);
       }
     }
+
+    initSearchBar({
+      onSearch: handleSearch,
+      onClear: () => hide(el('#search-results')),
+      live: true
+    });
 
     // Load on page load
     loadContent();
