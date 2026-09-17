@@ -74,26 +74,45 @@ async function initApp() {
 
 // Show notifications
 function showNotification(message, type = 'success') {
+  // Messages share a stack, otherwise several at once land on top of each other
+  let stack = document.getElementById('notification-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'notification-stack';
+    stack.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      left: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+      z-index: 9999;
+    `;
+    document.body.appendChild(stack);
+  }
+
   const notification = document.createElement('div');
   notification.style.cssText = `
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 16px 24px;
+    max-width: min(420px, 100%);
+    padding: 14px 20px;
     background: ${type === 'success' ? '#34c759' : '#ff3b30'};
     color: white;
     border-radius: 4px;
     font-weight: 600;
-    z-index: 9999;
+    line-height: 1.35;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
     animation: slideIn 0.3s ease;
   `;
   notification.textContent = message;
-  document.body.appendChild(notification);
+  stack.appendChild(notification);
 
   setTimeout(() => {
     notification.style.animation = 'slideOut 0.3s ease';
     setTimeout(() => notification.remove(), 300);
-  }, 3000);
+  }, type === 'error' ? 6000 : 3000);
 }
 
 let searchClearHandler = null;

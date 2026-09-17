@@ -708,8 +708,25 @@
           paginationDiv.appendChild(btn);
         }
       } catch (error) {
-        console.error('Error loading products:', error);
+        reportFailure('Не удалось загрузить товары', error);
+        el('#products-table-body').innerHTML = `
+          <tr><td colspan="7" class="loading">
+            ${failureText(error)}
+            <button class="btn btn-ghost" onclick="loadProducts()">Повторить</button>
+          </td></tr>`;
       }
+    }
+
+    // Requests used to fail into the console only, leaving the page looking frozen
+    function failureText(error) {
+      return error instanceof TypeError
+        ? 'Нет связи с сервером. Проверьте, запущен ли backend и верен ли его адрес.'
+        : `Сервер ответил ошибкой: ${error.message}`;
+    }
+
+    function reportFailure(action, error) {
+      console.error(action, error);
+      showNotification(`${action}. ${failureText(error)}`, 'error');
     }
 
     async function loadCategoriesForSelect() {
@@ -721,7 +738,7 @@
           select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
         });
       } catch (error) {
-        console.error('Error loading categories:', error);
+        reportFailure('Не удалось загрузить категории', error);
       }
     }
 
@@ -734,7 +751,7 @@
           select.innerHTML += `<option value="${brand.id}">${brand.name}</option>`;
         });
       } catch (error) {
-        console.error('Error loading brands:', error);
+        reportFailure('Не удалось загрузить бренды', error);
       }
     }
 
@@ -768,7 +785,7 @@
 
         el('#product-modal').classList.add('active');
       } catch (error) {
-        console.error('Error loading product:', error);
+        reportFailure('Не удалось открыть товар', error);
       }
     }
 
@@ -1319,7 +1336,8 @@
           `;
         });
       } catch (error) {
-        console.error('Error loading categories:', error);
+        reportFailure('Не удалось загрузить категории', error);
+        el('#categories-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
     }
 
@@ -1366,7 +1384,8 @@
           `;
         });
       } catch (error) {
-        console.error('Error loading brands:', error);
+        reportFailure('Не удалось загрузить бренды', error);
+        el('#brands-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
     }
 
