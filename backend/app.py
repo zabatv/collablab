@@ -394,6 +394,20 @@ def upload_product_video(product_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/admin/products/<int:product_id>/videos/<int:video_id>', methods=['DELETE'])
+@require_admin
+def delete_product_video(product_id, video_id):
+    """Remove a video from a product"""
+    video = ProductVideo.query.filter_by(id=video_id, product_id=product_id).first_or_404()
+
+    try:
+        db.session.delete(video)
+        db.session.commit()
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
 @app.route('/api/admin/categories', methods=['GET', 'POST'])
 @require_admin
 def admin_categories():

@@ -99,6 +99,23 @@ const AdminAPI = {
     }).then(res => res.json());
   },
 
+  addVideo: (productId, data) => {
+    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    return apiCall(`/admin/products/${productId}/upload-video`, {
+      method: 'POST',
+      headers,
+      body: data
+    });
+  },
+
+  deleteVideo: (productId, videoId) => {
+    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    return apiCall(`/admin/products/${productId}/videos/${videoId}`, {
+      method: 'DELETE',
+      headers
+    });
+  },
+
   getCategories: () => {
     const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
     return apiCall('/admin/categories', { headers });

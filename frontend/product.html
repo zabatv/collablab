@@ -205,7 +205,11 @@
         `;
       }
 
+      html += '<div id="product-videos-section"></div>';
+
       el('#product-container').innerHTML = html;
+
+      renderVideos(product.videos);
 
       // Render thumbnails
       const thumbnailsDiv = el('#thumbnails');
@@ -217,6 +221,75 @@
         thumb.onclick = () => selectImage(index);
         thumbnailsDiv.appendChild(thumb);
       });
+    }
+
+    // Builds a player for a video URL, or null when the link is not playable inline
+    function createVideoPlayer(url) {
+      const youtube = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+      const rutube = url.match(/rutube\.ru\/(?:video|play\/embed)\/(\w+)/);
+
+      if (youtube || rutube) {
+        const frame = document.createElement('iframe');
+        frame.src = youtube
+          ? `https://www.youtube.com/embed/${youtube[1]}`
+          : `https://rutube.ru/play/embed/${rutube[1]}`;
+        frame.allowFullscreen = true;
+        frame.loading = 'lazy';
+        return frame;
+      }
+
+      if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        return video;
+      }
+
+      return null;
+    }
+
+    function renderVideos(videos) {
+      const section = el('#product-videos-section');
+      const playable = (videos || []).filter(v => /^https?:\/\//i.test(v.url));
+      if (playable.length === 0) return;
+
+      const heading = document.createElement('h3');
+      heading.textContent = 'ВИДЕО';
+      section.appendChild(heading);
+
+      const grid = document.createElement('div');
+      grid.className = 'video-grid';
+
+      playable.forEach(video => {
+        const item = document.createElement('div');
+        item.className = 'video-item';
+
+        const player = createVideoPlayer(video.url);
+        if (player) {
+          const frame = document.createElement('div');
+          frame.className = 'video-frame';
+          frame.appendChild(player);
+          item.appendChild(frame);
+        } else {
+          const link = document.createElement('a');
+          link.href = video.url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = 'Смотреть видео';
+          item.appendChild(link);
+        }
+
+        if (video.title) {
+          const caption = document.createElement('div');
+          caption.className = 'video-title';
+          caption.textContent = video.title;
+          item.appendChild(caption);
+        }
+
+        grid.appendChild(item);
+      });
+
+      section.appendChild(grid);
     }
 
     function selectImage(index) {
