@@ -76,3 +76,7 @@ htmlcov/
 .env.production
 temp/
 tmp/
+
+# Generated per deployment with the real domain
+frontend/sitemap.xml
+frontend/robots.txt

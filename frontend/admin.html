@@ -312,6 +312,194 @@
       object-fit: contain;
     }
 
+    .seo-cards {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .seo-card {
+      flex: 1 1 150px;
+      padding: 20px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fafafa;
+    }
+
+    .seo-card-value {
+      font-size: 30px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .seo-card-label {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--color-gray-dark);
+    }
+
+    .seo-heading {
+      margin: 32px 0 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .seo-note {
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+
+    .seo-issue {
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+
+    .seo-issue-head {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border: 0;
+      background: none;
+      font-family: inherit;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .seo-issue-head:hover {
+      background: #fafafa;
+    }
+
+    .seo-issue-title {
+      flex: 1;
+      font-weight: 600;
+    }
+
+    .seo-issue-count {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .seo-badge {
+      padding: 3px 9px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .seo-badge-high { background: #ffe1de; color: #c0261a; }
+    .seo-badge-medium { background: #fff1d6; color: #9a6400; }
+    .seo-badge-low { background: #eeeeee; color: #666; }
+
+    .seo-issue-body {
+      display: none;
+      padding: 0 16px 16px;
+      border-top: 1px solid var(--color-border);
+    }
+
+    .seo-issue.open .seo-issue-body {
+      display: block;
+    }
+
+    .seo-product-list {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .seo-product {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      border: 0;
+      border-bottom: 1px solid var(--color-border);
+      background: none;
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .seo-product:hover {
+      background: #f0f6ff;
+      color: var(--color-accent);
+    }
+
+    .seo-product-sku {
+      display: inline-block;
+      min-width: 90px;
+      font-weight: 600;
+    }
+
+    .seo-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .seo-check-mark {
+      font-weight: 700;
+      color: #c0261a;
+    }
+
+    .seo-check.ok .seo-check-mark {
+      color: #1a8a34;
+    }
+
+    .seo-check-why {
+      display: block;
+      font-size: 12px;
+      color: var(--color-gray-dark);
+    }
+
+    .seo-sitemap {
+      margin-top: 24px;
+      padding: 16px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fafafa;
+      max-width: 560px;
+    }
+
+    .seo-sitemap label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .seo-table {
+      margin-bottom: 24px;
+    }
+
+    .seo-table h4 {
+      margin-bottom: 8px;
+    }
+
+    .seo-table-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--color-border);
+      font-size: 13px;
+    }
+
+    .seo-table-value {
+      white-space: nowrap;
+      color: var(--color-gray-dark);
+    }
+
+    .seo-empty-searches .seo-table-row {
+      color: #c0261a;
+    }
+
     .admin-form {
       background: #f9f9f9;
       padding: 24px;
@@ -424,6 +612,7 @@
         <div class="nav-item active" onclick="switchTab('products')">Товары</div>
         <div class="nav-item" onclick="switchTab('categories')">Категории</div>
         <div class="nav-item" onclick="switchTab('brands')">Бренды</div>
+        <div class="nav-item" onclick="switchTab('seo')">SEO</div>
 
         <button class="btn btn-ghost logout-btn" onclick="logout()" style="width: 100%;">ВЫХОД</button>
       </nav>
@@ -487,6 +676,35 @@
         </div>
 
         <div id="brands-list"></div>
+      </section>
+
+      <!-- SEO Section -->
+      <section class="admin-section" id="seo-section">
+        <div class="admin-header">
+          <h1>SEO АНАЛИТИКА</h1>
+          <button class="btn btn-ghost" onclick="loadSeo()">ОБНОВИТЬ</button>
+        </div>
+
+        <div id="seo-summary" class="seo-cards"></div>
+
+        <h3 class="seo-heading">ГОТОВНОСТЬ КАТАЛОГА</h3>
+        <p class="text-muted seo-note">Нажмите на строку, чтобы увидеть товары и открыть карточку для исправления</p>
+        <div id="seo-issues" class="loading">Загрузка...</div>
+
+        <h3 class="seo-heading">ТЕХНИЧЕСКОЕ СОСТОЯНИЕ САЙТА</h3>
+        <div id="seo-technical" class="loading">Загрузка...</div>
+
+        <div class="seo-sitemap">
+          <label for="seo-base-url">Адрес сайта</label>
+          <div class="upload-url-row">
+            <input type="text" id="seo-base-url" placeholder="https://example.ru">
+            <button type="button" class="btn btn-primary" onclick="buildSitemap()">СОЗДАТЬ КАРТУ САЙТА</button>
+          </div>
+          <small class="text-muted">Создаст sitemap.xml и robots.txt в папке сайта</small>
+        </div>
+
+        <h3 class="seo-heading">ПОСЕЩАЕМОСТЬ ЗА 30 ДНЕЙ</h3>
+        <div id="seo-traffic" class="loading">Загрузка...</div>
       </section>
     </main>
   </div>
@@ -659,6 +877,232 @@
       // Load data
       if (tab === 'categories') loadCategories();
       if (tab === 'brands') loadBrands();
+      if (tab === 'seo') loadSeo();
+    }
+
+    // ===== SEO =====
+
+    const SEVERITY_LABEL = { high: 'критично', medium: 'важно', low: 'мелочь' };
+
+    async function loadSeo() {
+      loadSeoCatalog();
+      loadSeoTechnical();
+      loadSeoTraffic();
+    }
+
+    async function loadSeoCatalog() {
+      const container = el('#seo-issues');
+      try {
+        const data = await AdminAPI.seoCatalog();
+
+        el('#seo-summary').innerHTML = `
+          <div class="seo-card">
+            <div class="seo-card-value">${data.ready}</div>
+            <div class="seo-card-label">готовы к индексации</div>
+          </div>
+          <div class="seo-card">
+            <div class="seo-card-value">${data.total - data.ready}</div>
+            <div class="seo-card-label">с серьёзными проблемами</div>
+          </div>
+          <div class="seo-card">
+            <div class="seo-card-value">${data.total}</div>
+            <div class="seo-card-label">товаров всего</div>
+          </div>`;
+
+        clear(container);
+        container.classList.remove('loading');
+
+        const found = data.issues.filter(issue => issue.count > 0);
+        if (found.length === 0) {
+          container.innerHTML = '<p class="text-muted">Проблем не найдено</p>';
+          return;
+        }
+
+        found.forEach(issue => container.appendChild(buildIssueRow(issue)));
+      } catch (error) {
+        container.classList.remove('loading');
+        container.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    function buildIssueRow(issue) {
+      const row = document.createElement('div');
+      row.className = 'seo-issue';
+
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'seo-issue-head';
+      head.innerHTML = `
+        <span class="seo-badge seo-badge-${issue.severity}">${SEVERITY_LABEL[issue.severity]}</span>
+        <span class="seo-issue-title">${issue.title}</span>
+        <span class="seo-issue-count">${issue.count}</span>`;
+
+      const body = document.createElement('div');
+      body.className = 'seo-issue-body';
+
+      const why = document.createElement('p');
+      why.className = 'text-muted';
+      why.textContent = issue.why;
+      body.appendChild(why);
+
+      const list = document.createElement('div');
+      list.className = 'seo-product-list';
+      issue.products.forEach(product => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'seo-product';
+        item.innerHTML = `<span class="seo-product-sku">${product.sku}</span> ${product.name}`;
+        item.onclick = () => {
+          switchTabTo('products');
+          editProduct(product.id);
+        };
+        list.appendChild(item);
+      });
+
+      if (issue.count > issue.products.length) {
+        const more = document.createElement('p');
+        more.className = 'text-muted';
+        more.textContent = `Показаны первые ${issue.products.length} из ${issue.count}`;
+        body.appendChild(more);
+      }
+
+      body.appendChild(list);
+      head.onclick = () => row.classList.toggle('open');
+
+      row.appendChild(head);
+      row.appendChild(body);
+      return row;
+    }
+
+    // switchTab reads event.target, so moving tabs from code needs its own path
+    function switchTabTo(tab) {
+      document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      el(`#${tab}-section`).classList.add('active');
+      document.querySelectorAll('.nav-item')[['products', 'categories', 'brands', 'seo'].indexOf(tab)]
+        .classList.add('active');
+    }
+
+    async function loadSeoTechnical() {
+      const container = el('#seo-technical');
+      try {
+        const data = await AdminAPI.seoTechnical();
+        clear(container);
+        container.classList.remove('loading');
+
+        const summary = document.createElement('p');
+        summary.className = 'text-muted';
+        summary.textContent = `Пройдено проверок: ${data.passed} из ${data.total}`;
+        container.appendChild(summary);
+
+        data.checks.forEach(check => {
+          const row = document.createElement('div');
+          row.className = 'seo-check' + (check.ok ? ' ok' : '');
+          row.innerHTML = `
+            <span class="seo-check-mark">${check.ok ? '✓' : '✗'}</span>
+            <span>
+              <strong>${check.title}</strong>
+              <span class="seo-check-why">${check.why}</span>
+            </span>`;
+          container.appendChild(row);
+        });
+      } catch (error) {
+        container.classList.remove('loading');
+        container.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    async function loadSeoTraffic() {
+      const container = el('#seo-traffic');
+      try {
+        const data = await AdminAPI.seoTraffic();
+        clear(container);
+        container.classList.remove('loading');
+
+        if (data.total_views === 0 && data.total_searches === 0) {
+          container.innerHTML = '<p class="text-muted">Пока нет данных. Счёт начинается с момента установки этого обновления.</p>';
+          return;
+        }
+
+        const stats = document.createElement('div');
+        stats.className = 'seo-cards';
+        stats.innerHTML = `
+          <div class="seo-card">
+            <div class="seo-card-value">${data.total_views}</div>
+            <div class="seo-card-label">просмотров товаров</div>
+          </div>
+          <div class="seo-card">
+            <div class="seo-card-value">${data.total_searches}</div>
+            <div class="seo-card-label">поисков по сайту</div>
+          </div>`;
+        container.appendChild(stats);
+
+        container.appendChild(buildTrafficTable('Самые просматриваемые товары',
+          data.top_products.map(p => [`${p.sku} — ${p.name}`, `${p.views}`])));
+
+        container.appendChild(buildTrafficTable('Что ищут на сайте',
+          data.top_searches.map(s => [s.query, `${s.count} раз, найдено ${s.results}`])));
+
+        if (data.empty_searches.length > 0) {
+          const block = buildTrafficTable('Искали, но не нашли',
+            data.empty_searches.map(s => [s.query, `${s.count} раз`]));
+          block.classList.add('seo-empty-searches');
+          container.appendChild(block);
+        }
+      } catch (error) {
+        container.classList.remove('loading');
+        container.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    function buildTrafficTable(title, rows) {
+      const block = document.createElement('div');
+      block.className = 'seo-table';
+
+      const heading = document.createElement('h4');
+      heading.textContent = title;
+      block.appendChild(heading);
+
+      if (rows.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-muted';
+        empty.textContent = 'Пока пусто';
+        block.appendChild(empty);
+        return block;
+      }
+
+      rows.forEach(([left, right]) => {
+        const row = document.createElement('div');
+        row.className = 'seo-table-row';
+
+        const label = document.createElement('span');
+        label.textContent = left;
+        const value = document.createElement('span');
+        value.className = 'seo-table-value';
+        value.textContent = right;
+
+        row.appendChild(label);
+        row.appendChild(value);
+        block.appendChild(row);
+      });
+
+      return block;
+    }
+
+    async function buildSitemap() {
+      const baseUrl = el('#seo-base-url').value.trim();
+      if (!baseUrl) {
+        showNotification('Укажите адрес сайта', 'error');
+        return;
+      }
+
+      try {
+        const result = await AdminAPI.buildSitemap(baseUrl);
+        showNotification(result.message);
+        loadSeoTechnical();
+      } catch (error) {
+        showNotification('Не удалось создать карту сайта: ' + error.message, 'error');
+      }
     }
 
     // Products

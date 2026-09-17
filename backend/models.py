@@ -134,3 +134,21 @@ class Specification(db.Model):
             'name': self.name,
             'value': self.value
         }
+
+# Traffic is recorded as plain counts of what was opened or searched for.
+# Nothing identifying a visitor is stored — no address, no identifier.
+
+class ProductView(db.Model):
+    __tablename__ = 'product_views'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False, index=True)
+    viewed_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+class SearchQuery(db.Model):
+    __tablename__ = 'search_queries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    query = db.Column(db.String(255), nullable=False, index=True)
+    results_count = db.Column(db.Integer, default=0)
+    searched_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)

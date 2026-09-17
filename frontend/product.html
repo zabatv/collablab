@@ -113,6 +113,9 @@
         currentProduct = await ProductAPI.getProduct(productId);
         renderProduct();
         loadRelatedProducts();
+
+        // Counted for the admin statistics; failure here must not affect the page
+        fetch(`${API_BASE}/track/view/${productId}`, { method: 'POST' }).catch(() => {});
       } catch (error) {
         console.error('Error loading product:', error);
         el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p><a href="catalog.html">Вернуться в каталог</a></p></div>';

@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
-from models import db, Product, Category, Brand, ProductImage, ProductVideo, Specification
+from models import (db, Product, Category, Brand, ProductImage, ProductVideo,
+                    Specification, ProductView, SearchQuery)
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -321,6 +322,10 @@ def get_products():
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
+    # Only the first page, so paging through results is not counted as a new search
+    if search and page == 1:
+        record_search(search, pagination.total)
+
     return jsonify({
         'products': [product.to_dict() for product in pagination.items],
         'total': pagination.total,
@@ -333,6 +338,26 @@ def get_product(product_id):
     """Get single product with full details"""
     product = Product.query.get_or_404(product_id)
     return jsonify(product.to_dict(full=True))
+
+@app.route('/api/track/view/<int:product_id>', methods=['POST'])
+def track_view(product_id):
+    """Count a product page opening. Nothing about the visitor is stored."""
+    try:
+        if Product.query.get(product_id):
+            db.session.add(ProductView(product_id=product_id))
+            db.session.commit()
+    except Exception:
+        # Counting must never break the page it is counting
+        db.session.rollback()
+
+    return '', 204
+
+def record_search(query_text, results_count):
+    try:
+        db.session.add(SearchQuery(query=query_text[:255], results_count=results_count))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 @app.route('/api/products/search', methods=['GET'])
 def search_products():
@@ -938,6 +963,227 @@ def import_excel():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': f'Ошибка чтения файла: {str(e)}'}), 400
+
+# ===== SEO ANALYTICS =====
+
+# A search result shows roughly this much of a title before cutting it off
+TITLE_MAX = 70
+TITLE_MIN = 15
+DESCRIPTION_MIN = 120
+
+def product_brief(product):
+    return {'id': product.id, 'sku': product.sku, 'name': product.name}
+
+@app.route('/api/admin/seo/catalog', methods=['GET'])
+@require_admin
+def seo_catalog():
+    """What in the catalogue keeps a product from ranking"""
+    products = Product.query.filter_by(is_active=True).all()
+    total = len(products)
+
+    described = [p for p in products if (p.description or '').strip()]
+    short_description = [p for p in described if len(p.description.strip()) < DESCRIPTION_MIN]
+
+    seen_names, duplicate_names = {}, []
+    seen_skus, duplicate_skus = {}, []
+    for product in products:
+        key = (product.name or '').strip().lower()
+        seen_names.setdefault(key, []).append(product)
+        seen_skus.setdefault((product.sku or '').strip().lower(), []).append(product)
+
+    for group in seen_names.values():
+        if len(group) > 1:
+            duplicate_names.extend(group)
+    for group in seen_skus.values():
+        if len(group) > 1:
+            duplicate_skus.extend(group)
+
+    specs = {row[0] for row in db.session.query(Specification.product_id).distinct()}
+
+    issues = [
+        {'key': 'no_description', 'title': 'Без описания',
+         'why': 'Поисковику нечего показать в сниппете и не за что ранжировать',
+         'severity': 'high',
+         'products': [p for p in products if not (p.description or '').strip()]},
+        {'key': 'short_description', 'title': f'Описание короче {DESCRIPTION_MIN} символов',
+         'why': 'Слишком мало текста, чтобы страница отвечала на запрос',
+         'severity': 'medium', 'products': short_description},
+        {'key': 'no_image', 'title': 'Без фотографии',
+         'why': 'Товар не попадёт в поиск по картинкам и в товарную выдачу',
+         'severity': 'high',
+         'products': [p for p in products if not p.image]},
+        {'key': 'no_specs', 'title': 'Без характеристик',
+         'why': 'Нет параметров, по которым товар ищут: размер, резьба, давление',
+         'severity': 'medium',
+         'products': [p for p in products if p.id not in specs]},
+        {'key': 'long_name', 'title': f'Название длиннее {TITLE_MAX} символов',
+         'why': 'В выдаче обрежется многоточием, важное может не попасть',
+         'severity': 'medium',
+         'products': [p for p in products if len(p.name or '') > TITLE_MAX]},
+        {'key': 'short_name', 'title': f'Название короче {TITLE_MIN} символов',
+         'why': 'Слишком общее название проигрывает конкурентам в выдаче',
+         'severity': 'low',
+         'products': [p for p in products if len(p.name or '') < TITLE_MIN]},
+        {'key': 'duplicate_name', 'title': 'Одинаковые названия',
+         'why': 'Поисковик считает такие страницы дублями и показывает одну',
+         'severity': 'high', 'products': duplicate_names},
+        {'key': 'duplicate_sku', 'title': 'Одинаковые артикулы',
+         'why': 'Два товара с одним артикулом путают и покупателя, и выгрузку',
+         'severity': 'high', 'products': duplicate_skus},
+        {'key': 'no_price', 'title': 'Без цены',
+         'why': 'Товар без цены не попадает в товарную выдачу',
+         'severity': 'high',
+         'products': [p for p in products if not p.price]},
+        {'key': 'out_of_stock', 'title': 'Нулевой остаток',
+         'why': 'Отсутствие в наличии понижает товар в выдаче',
+         'severity': 'low',
+         'products': [p for p in products if not p.stock]},
+    ]
+
+    # A product is ready when nothing serious is wrong with it
+    serious = {p.id for issue in issues if issue['severity'] == 'high' for p in issue['products']}
+
+    return jsonify({
+        'total': total,
+        'ready': total - len(serious),
+        'issues': [{
+            'key': issue['key'],
+            'title': issue['title'],
+            'why': issue['why'],
+            'severity': issue['severity'],
+            'count': len(issue['products']),
+            'products': [product_brief(p) for p in issue['products'][:100]],
+        } for issue in issues]
+    })
+
+@app.route('/api/admin/seo/technical', methods=['GET'])
+@require_admin
+def seo_technical():
+    """What the site itself is missing for search engines"""
+    frontend = os.path.join(BASE_DIR, '..', 'frontend')
+
+    def read_page(name):
+        path = os.path.join(frontend, name)
+        if not os.path.exists(path):
+            return None
+        with open(path, encoding='utf-8') as f:
+            return f.read()
+
+    pages = {name: read_page(name) for name in ('index.html', 'catalog.html', 'product.html')}
+    present = {name: html for name, html in pages.items() if html}
+
+    def every_page_has(fragment):
+        return bool(present) and all(fragment in html for html in present.values())
+
+    checks = [
+        {'key': 'robots', 'title': 'robots.txt',
+         'ok': os.path.exists(os.path.join(frontend, 'robots.txt')),
+         'why': 'Говорит роботу, что индексировать, и где искать карту сайта'},
+        {'key': 'sitemap', 'title': 'sitemap.xml',
+         'ok': os.path.exists(os.path.join(frontend, 'sitemap.xml')),
+         'why': 'Список всех страниц, чтобы робот не искал их сам'},
+        {'key': 'description', 'title': 'Описание страниц (meta description)',
+         'ok': every_page_has('name="description"'),
+         'why': 'Текст под заголовком в результатах поиска'},
+        {'key': 'og', 'title': 'Теги для соцсетей (Open Graph)',
+         'ok': every_page_has('property="og:'),
+         'why': 'Картинка и заголовок при отправке ссылки в мессенджер'},
+        {'key': 'schema', 'title': 'Микроразметка товара (Schema.org)',
+         'ok': 'schema.org' in (pages.get('product.html') or ''),
+         'why': 'Показывает цену и наличие прямо в результатах поиска'},
+        {'key': 'canonical', 'title': 'Канонический адрес',
+         'ok': every_page_has('rel="canonical"'),
+         'why': 'Склеивает адреса с параметрами, чтобы не плодить дубли'},
+        {'key': 'unique_titles', 'title': 'Уникальные заголовки товаров',
+         'ok': 'id="page-title"' in (pages.get('product.html') or ''),
+         'why': 'Сейчас у всех карточек один заголовок «Товар - ROBOT»'},
+        {'key': 'prerender', 'title': 'Товары видны без JavaScript',
+         'ok': False,
+         'why': 'Робот получает пустую страницу: название и цена подставляются скриптом'},
+    ]
+
+    return jsonify({
+        'passed': sum(1 for c in checks if c['ok']),
+        'total': len(checks),
+        'checks': checks
+    })
+
+@app.route('/api/admin/seo/traffic', methods=['GET'])
+@require_admin
+def seo_traffic():
+    """What visitors open and search for"""
+    days = request.args.get('days', 30, type=int)
+    since = datetime.utcnow() - timedelta(days=days)
+
+    view_counts = (db.session.query(ProductView.product_id, db.func.count(ProductView.id))
+                   .filter(ProductView.viewed_at >= since)
+                   .group_by(ProductView.product_id)
+                   .order_by(db.func.count(ProductView.id).desc())
+                   .limit(10).all())
+
+    products = {p.id: p for p in Product.query.filter(
+        Product.id.in_([pid for pid, _ in view_counts])).all()} if view_counts else {}
+
+    searches = (db.session.query(SearchQuery.query, db.func.count(SearchQuery.id),
+                                 db.func.max(SearchQuery.results_count))
+                .filter(SearchQuery.searched_at >= since)
+                .group_by(SearchQuery.query)
+                .order_by(db.func.count(SearchQuery.id).desc())
+                .limit(20).all())
+
+    return jsonify({
+        'days': days,
+        'total_views': db.session.query(db.func.count(ProductView.id))
+                       .filter(ProductView.viewed_at >= since).scalar() or 0,
+        'total_searches': db.session.query(db.func.count(SearchQuery.id))
+                          .filter(SearchQuery.searched_at >= since).scalar() or 0,
+        'top_products': [{
+            'id': pid,
+            'name': products[pid].name if pid in products else 'Товар удалён',
+            'sku': products[pid].sku if pid in products else '',
+            'views': count
+        } for pid, count in view_counts],
+        'top_searches': [{'query': q, 'count': count, 'results': results}
+                         for q, count, results in searches],
+        'empty_searches': [{'query': q, 'count': count}
+                           for q, count, results in searches if not results][:10]
+    })
+
+@app.route('/api/admin/seo/sitemap', methods=['POST'])
+@require_admin
+def generate_sitemap():
+    """Write sitemap.xml and robots.txt next to the pages they describe"""
+    data = request.get_json(silent=True) or {}
+    base = str(data.get('base_url', '')).strip().rstrip('/')
+
+    if not base.startswith(('http://', 'https://')):
+        return jsonify({'error': 'Укажите адрес сайта, например https://example.ru'}), 400
+
+    frontend = os.path.join(BASE_DIR, '..', 'frontend')
+    today = datetime.utcnow().strftime('%Y-%m-%d')
+
+    urls = [f'{base}/', f'{base}/catalog.html']
+    urls += [f'{base}/catalog.html?category={c.id}' for c in Category.query.all()]
+    urls += [f'{base}/product.html?id={p.id}'
+             for p in Product.query.filter_by(is_active=True).all()]
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for url in urls:
+        escaped = url.replace('&', '&amp;')
+        lines.append(f'  <url><loc>{escaped}</loc><lastmod>{today}</lastmod></url>')
+    lines.append('</urlset>')
+
+    with open(os.path.join(frontend, 'sitemap.xml'), 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+
+    with open(os.path.join(frontend, 'robots.txt'), 'w', encoding='utf-8') as f:
+        f.write('User-agent: *\n'
+                'Disallow: /admin.html\n'
+                'Disallow: /login.html\n'
+                f'\nSitemap: {base}/sitemap.xml\n')
+
+    return jsonify({'urls': len(urls), 'message': f'Создано: sitemap.xml ({len(urls)} адресов) и robots.txt'})
 
 # ===== HEALTH CHECK =====
 
