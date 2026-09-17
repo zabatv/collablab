@@ -1,10 +1,13 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from models import db, Product, Category, Brand, ProductImage, ProductVideo, Specification
 from werkzeug.utils import secure_filename
 import os
 from datetime import datetime
 from functools import wraps
+import io
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 
 app = Flask(__name__)
 CORS(app)
@@ -238,6 +241,53 @@ def upload_product_image(product_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/admin/products/<int:product_id>/set-image-url', methods=['POST'])
+@require_admin
+def set_product_image_url(product_id):
+    """Set product image from URL"""
+    product = Product.query.get_or_404(product_id)
+    data = request.get_json()
+    url = data.get('url', '').strip()
+
+    if not url:
+        return jsonify({'error': 'URL not provided'}), 400
+
+    try:
+        import requests as req
+        resp = req.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+        if resp.status_code != 200:
+            return jsonify({'error': f'Failed to download: HTTP {resp.status_code}'}), 400
+
+        content_type = resp.headers.get('Content-Type', '')
+        if 'image' not in content_type:
+            return jsonify({'error': 'URL does not point to an image'}), 400
+
+        ext = '.jpg'
+        if 'png' in content_type: ext = '.png'
+        elif 'webp' in content_type: ext = '.webp'
+        elif 'gif' in content_type: ext = '.gif'
+
+        filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+
+        with open(filepath, 'wb') as f:
+            f.write(resp.content)
+
+        if not product.image:
+            product.image = f'/uploads/{filename}'
+
+        product_image = ProductImage(
+            product_id=product_id,
+            image_url=f'/uploads/{filename}',
+            order=len(product.images)
+        )
+        db.session.add(product_image)
+        db.session.commit()
+
+        return jsonify({'url': f'/uploads/{filename}'}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
 @app.route('/api/admin/products/<int:product_id>/upload-video', methods=['POST'])
 @require_admin
 def upload_product_video(product_id):
@@ -298,6 +348,270 @@ def admin_brands():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
+
+# ===== EXCEL IMPORT/EXPORT =====
+
+@app.route('/api/admin/export/excel', methods=['GET'])
+@require_admin
+def export_excel():
+    """Export all products to Excel"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Товары"
+
+    # Header style
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+
+    # Headers
+    headers = ['ID', 'SKU', 'Название', 'Описание', 'Категория', 'Бренд', 'Цена', 'Старая цена', 'Остаток', 'Активен']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = thin_border
+
+    # Data
+    products = Product.query.all()
+    for row, product in enumerate(products, 2):
+        data = [
+            product.id,
+            product.sku,
+            product.name,
+            product.description or '',
+            product.category.name if product.category else '',
+            product.brand.name if product.brand else '',
+            product.price,
+            product.old_price or '',
+            product.stock,
+            'Да' if product.is_active else 'Нет'
+        ]
+        for col, value in enumerate(data, 1):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.border = thin_border
+            if col in [7, 8]:  # Price columns
+                cell.number_format = '#,##0.00'
+            elif col == 9:  # Stock
+                cell.number_format = '#,##0'
+
+    # Auto-adjust column widths
+    for col in range(1, len(headers) + 1):
+        max_length = max(len(str(ws.cell(row=r, column=col).value or '')) for r in range(1, ws.max_row + 1))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max_length + 2, 50)
+
+    # Save to buffer
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=f'products_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    )
+
+@app.route('/api/admin/import/excel', methods=['POST'])
+@require_admin
+def import_excel():
+    """Import products from Excel"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл не загружен'}), 400
+
+    file = request.files['file']
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        return jsonify({'error': 'Поддерживаются только файлы .xlsx'}), 400
+
+    try:
+        wb = openpyxl.load_workbook(file)
+        ws = wb.active
+
+        # Step 1: Auto-detect columns by scanning data patterns (most reliable)
+        sku_col = None
+        name_col = None
+        price_col = None
+
+        for col in range(1, min(ws.max_column + 1, 25)):
+            sample = [ws.cell(row=r, column=col).value for r in range(2, min(20, ws.max_row + 1))]
+            non_empty = [s for s in sample if s is not None and str(s).strip()]
+
+            if not non_empty:
+                continue
+
+            # SKU: short alphanumeric strings like TKC-PY-4
+            if not sku_col and all(isinstance(s, str) and 2 <= len(s) <= 30 for s in non_empty[:5]):
+                if any(any(c.isalpha() for c in str(s)) for s in non_empty[:3]):
+                    sku_col = col
+
+            # Name: long text strings (>10 chars)
+            if not name_col and all(isinstance(s, str) and len(s) > 10 for s in non_empty[:3]):
+                name_col = col
+
+            # Price: numeric values > 1
+            numeric_vals = [s for s in non_empty if isinstance(s, (int, float)) and s > 1]
+            if not price_col and len(numeric_vals) >= 3:
+                price_col = col
+
+        # Fallback defaults
+        if not name_col:
+            name_col = 1
+        if not sku_col:
+            sku_col = 2 if sku_col != 2 else 3
+        if not price_col:
+            for col in range(4, min(ws.max_column + 1, 25)):
+                sample = [ws.cell(row=r, column=col).value for r in range(2, min(20, ws.max_row + 1))]
+                numeric_vals = [s for s in sample if isinstance(s, (int, float)) and s > 1]
+                if len(numeric_vals) >= 3:
+                    price_col = col
+                    break
+
+        # Step 2: Try to detect extra columns from header row (best effort)
+        header_row = 1
+        desc_col = None
+        category_col = None
+        brand_col = None
+        old_price_col = None
+        stock_col = None
+
+        for col in range(1, ws.max_column + 1):
+            if col in [sku_col, name_col, price_col]:
+                continue
+            cell_raw = ws.cell(row=header_row, column=col).value
+            if cell_raw is None:
+                continue
+            cell_value = str(cell_raw).lower().strip()
+            if not cell_value:
+                continue
+            if 'категория' in cell_value or 'category' in cell_value or 'тип' in cell_value:
+                category_col = col
+            elif 'бренд' in cell_value or 'brand' in cell_value:
+                brand_col = col
+            elif 'старая' in cell_value or 'old' in cell_value:
+                old_price_col = col
+            elif 'остаток' in cell_value or 'кол' in cell_value or 'stock' in cell_value or 'количество' in cell_value:
+                stock_col = col
+
+        imported = 0
+        updated = 0
+        errors = []
+
+        for row in range(header_row + 1, ws.max_row + 1):
+            sku = str(ws.cell(row=row, column=sku_col).value or '').strip()
+            name = str(ws.cell(row=row, column=name_col).value or '').strip()
+
+            if not sku or not name:
+                continue
+
+            try:
+                # Get or create category
+                category = None
+                if category_col:
+                    category_name = str(ws.cell(row=row, column=category_col).value or '').strip()
+                    if category_name:
+                        category = Category.query.filter_by(name=category_name).first()
+                        if not category:
+                            category = Category(
+                                name=category_name,
+                                slug=category_name.lower().replace(' ', '-')
+                            )
+                            db.session.add(category)
+                            db.session.flush()
+
+                # Get or create brand
+                brand = None
+                if brand_col:
+                    brand_name = str(ws.cell(row=row, column=brand_col).value or '').strip()
+                    if brand_name:
+                        brand = Brand.query.filter_by(name=brand_name).first()
+                        if not brand:
+                            brand = Brand(name=brand_name)
+                            db.session.add(brand)
+                            db.session.flush()
+
+                # Get price
+                price = 0
+                if price_col:
+                    price_val = ws.cell(row=row, column=price_col).value
+                    if price_val:
+                        price = float(price_val)
+
+                # Get old price
+                old_price = None
+                if old_price_col:
+                    old_price_val = ws.cell(row=row, column=old_price_col).value
+                    if old_price_val:
+                        old_price = float(old_price_val)
+
+                # Get stock
+                stock = 0
+                if stock_col:
+                    stock_val = ws.cell(row=row, column=stock_col).value
+                    if stock_val:
+                        stock = int(float(stock_val))
+
+                # Get description
+                description = ''
+                if desc_col:
+                    description = str(ws.cell(row=row, column=desc_col).value or '').strip()
+
+                # Check if product exists
+                existing = Product.query.filter_by(sku=sku).first()
+                if existing:
+                    existing.name = name
+                    existing.description = description or existing.description
+                    if category:
+                        existing.category_id = category.id
+                    if brand:
+                        existing.brand_id = brand.id
+                    existing.price = price if price > 0 else existing.price
+                    existing.old_price = old_price if old_price else existing.old_price
+                    existing.stock = stock
+                    existing.updated_at = datetime.utcnow()
+                    updated += 1
+                else:
+                    if not category:
+                        category = Category.query.first()
+                        if not category:
+                            category = Category(name="Без категории", slug="without-category")
+                            db.session.add(category)
+                            db.session.flush()
+
+                    product = Product(
+                        sku=sku,
+                        name=name,
+                        description=description,
+                        category_id=category.id,
+                        brand_id=brand.id if brand else None,
+                        price=price if price > 0 else 0,
+                        old_price=old_price,
+                        stock=stock
+                    )
+                    db.session.add(product)
+                    imported += 1
+
+            except Exception as e:
+                errors.append(f"Строка {row}: {str(e)}")
+
+        db.session.commit()
+
+        return jsonify({
+            'message': f'Импорт завершен: добавлено {imported}, обновлено {updated}',
+            'imported': imported,
+            'updated': updated,
+            'errors': errors[:10]  # Return first 10 errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Ошибка чтения файла: {str(e)}'}), 400
 
 # ===== HEALTH CHECK =====
 

@@ -201,7 +201,7 @@ header {
 }
 
 .search-bar::after {
-  content: '🔍';
+  content: 'Поиск';
   position: absolute;
   right: var(--spacing-md);
   top: 50%;

@@ -215,7 +215,12 @@
       <section class="admin-section active" id="products-section">
         <div class="admin-header">
           <h1>ТОВАРЫ</h1>
-          <button class="btn btn-primary" onclick="openAddProductModal()">ДОБАВИТЬ ТОВАР</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-ghost" onclick="exportToExcel()">ЭКСПОРТ EXCEL</button>
+            <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">ИМПОРТ EXCEL</button>
+            <input type="file" id="import-file" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
+            <button class="btn btn-primary" onclick="openAddProductModal()">ДОБАВИТЬ ТОВАР</button>
+          </div>
         </div>
 
         <div class="admin-table" style="overflow-x: auto;">
@@ -320,8 +325,18 @@
       </form>
 
       <div id="product-images" style="margin-top: 24px; display: none;">
-        <h4>ЗАГРУЗИТЬ ФОТО</h4>
-        <input type="file" id="product-image-input" accept="image/*" onchange="handleImageUpload()">
+        <h4>ФОТО ТОВАРА</h4>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 13px; font-weight: 600;">URL изображения</label>
+          <div style="display: flex; gap: 8px; margin-top: 4px;">
+            <input type="text" id="product-image-url" placeholder="https://example.com/image.jpg" style="flex: 1;">
+            <button type="button" class="btn btn-ghost" onclick="downloadImageByUrl()">Загрузить</button>
+          </div>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="font-size: 13px; font-weight: 600;">Или загрузить файл</label>
+          <input type="file" id="product-image-input" accept="image/*" onchange="handleImageUpload()" style="margin-top: 4px;">
+        </div>
         <div id="product-images-list" style="margin-top: 12px;"></div>
       </div>
     </div>
@@ -569,6 +584,29 @@
       }
     }
 
+    async function downloadImageByUrl() {
+      const url = el('#product-image-url').value.trim();
+      if (!url || !currentProductId) return;
+
+      try {
+        const adminKey = localStorage.getItem('admin_key');
+        const response = await fetch(`${API_BASE}/admin/products/${currentProductId}/set-image-url`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+          body: JSON.stringify({ url })
+        });
+
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error);
+
+        showNotification('Фото загружено');
+        el('#product-image-url').value = '';
+        editProduct(currentProductId);
+      } catch (error) {
+        showNotification('Ошибка: ' + error.message, 'error');
+      }
+    }
+
     // Categories
     async function loadCategories() {
       try {
@@ -666,6 +704,73 @@
     function logout() {
       localStorage.removeItem('admin_key');
       window.location.href = 'index.html';
+    }
+
+    // Excel Export
+    async function exportToExcel() {
+      try {
+        const adminKey = localStorage.getItem('admin_key');
+        const response = await fetch(`${API_BASE}/admin/export/excel`, {
+          headers: { 'X-Admin-Key': adminKey }
+        });
+
+        if (!response.ok) throw new Error('Ошибка экспорта');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `products_${new Date().toISOString().slice(0,10)}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+        showNotification('Файл экспортирован');
+      } catch (error) {
+        showNotification('Ошибка экспорта: ' + error.message, 'error');
+      }
+    }
+
+    // Excel Import
+    async function importFromExcel(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!confirm(`Импортировать товары из файла "${file.name}"?\n\nСуществующие товары (по SKU) будут обновлены.`)) {
+        event.target.value = '';
+        return;
+      }
+
+      try {
+        const adminKey = localStorage.getItem('admin_key');
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${API_BASE}/admin/import/excel`, {
+          method: 'POST',
+          headers: { 'X-Admin-Key': adminKey },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) throw new Error(result.error);
+
+        let message = result.message;
+        if (result.errors && result.errors.length > 0) {
+          message += '\n\nОшибки:\n' + result.errors.join('\n');
+        }
+
+        showNotification(message);
+        loadProducts();
+        loadCategoriesForSelect();
+        loadBrandsForSelect();
+      } catch (error) {
+        showNotification('Ошибка импорта: ' + error.message, 'error');
+      }
+
+      event.target.value = '';
     }
   </script>
 </body>

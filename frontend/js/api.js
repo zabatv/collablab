@@ -1,5 +1,5 @@
 // API Helper Functions
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = 'http://45.143.93.41:5000/api';
 
 async function apiCall(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
