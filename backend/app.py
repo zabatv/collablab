@@ -435,10 +435,15 @@ def upload_product_video_file(product_id):
     try:
         stored_path = save_upload(file, product_id, VIDEO_EXTENSIONS)
 
+        # Stored files are renamed, so keep the original name as a readable label
+        title = request.form.get('title', '').strip()
+        if not title:
+            title = os.path.splitext(os.path.basename(file.filename))[0]
+
         video = ProductVideo(
             product_id=product_id,
             video_url=stored_path,
-            title=request.form.get('title', '')
+            title=title
         )
         db.session.add(video)
         db.session.commit()

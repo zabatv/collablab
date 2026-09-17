@@ -227,19 +227,67 @@
       background: #000;
     }
 
-    .video-row {
+    .video-preview-grid {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-wrap: wrap;
       gap: 12px;
-      padding: 8px 0;
-      border-bottom: 1px solid var(--color-border);
     }
 
-    .video-row a {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .video-tile {
+      position: relative;
+      margin: 0;
+      width: 150px;
+    }
+
+    .video-tile img,
+    .video-tile video,
+    .video-tile-placeholder {
+      width: 150px;
+      height: 96px;
+      object-fit: cover;
+      display: block;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: #111;
+    }
+
+    .video-tile .is-clickable {
+      cursor: pointer;
+    }
+
+    .video-tile-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .video-tile.pending img,
+    .video-tile.pending video,
+    .video-tile.pending .video-tile-placeholder {
+      opacity: 0.6;
+      border-style: dashed;
+    }
+
+    .video-tile figcaption {
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.3;
+      word-break: break-word;
+    }
+
+    #video-lightbox-frame {
+      max-width: 90vw;
+      max-height: 90vh;
+    }
+
+    #video-lightbox-player {
+      max-width: 90vw;
+      max-height: 90vh;
+      cursor: default;
     }
 
     .image-lightbox {
@@ -536,6 +584,9 @@
   <!-- Image Lightbox -->
   <div class="image-lightbox" id="image-lightbox" onclick="closeImagePreview()">
     <img id="image-lightbox-img" src="" alt="">
+    <div id="video-lightbox-frame" style="display: none;">
+      <video id="video-lightbox-player" controls onclick="event.stopPropagation()"></video>
+    </div>
   </div>
 
   <!-- Add Category Modal -->
@@ -792,38 +843,121 @@
         return;
       }
 
-      const addRow = (label, onRemove, isPending) => {
-        const row = document.createElement('div');
-        row.className = 'video-row';
+      const grid = document.createElement('div');
+      grid.className = 'video-preview-grid';
 
-        const text = document.createElement('span');
-        text.textContent = label;
-        row.appendChild(text);
+      const addTile = ({ url, title, previewUrl, onRemove, isPending }) => {
+        const tile = document.createElement('figure');
+        tile.className = 'video-tile' + (isPending ? ' pending' : '');
 
+        const thumb = createVideoThumb(url, previewUrl);
+        if (url && !isPending) {
+          thumb.classList.add('is-clickable');
+          thumb.onclick = () => openVideoPreview(url);
+          thumb.title = 'Посмотреть';
+        }
+        tile.appendChild(thumb);
+
+        const caption = document.createElement('figcaption');
+        caption.textContent = title;
         if (isPending) {
           const badge = document.createElement('span');
           badge.className = 'pending-badge';
           badge.textContent = 'ожидает сохранения';
-          text.appendChild(badge);
+          caption.appendChild(badge);
         }
+        tile.appendChild(caption);
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
-        removeBtn.className = 'btn btn-ghost';
-        removeBtn.textContent = isPending ? 'Убрать' : 'Удалить';
+        removeBtn.className = 'thumb-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = isPending ? 'Убрать' : 'Удалить';
         removeBtn.onclick = onRemove;
-        row.appendChild(removeBtn);
+        tile.appendChild(removeBtn);
 
-        list.appendChild(row);
+        grid.appendChild(tile);
       };
 
-      saved.forEach(video => addRow(video.title || video.url, () => deleteVideo(video.id), false));
-      pendingMedia.videos.forEach((item, index) => {
-        addRow(item.title || item.file?.name || item.url, () => {
+      saved.forEach(video => addTile({
+        url: video.url,
+        title: video.title || videoLabel(video.url),
+        onRemove: () => deleteVideo(video.id)
+      }));
+
+      pendingMedia.videos.forEach((item, index) => addTile({
+        url: item.url || '',
+        title: item.title || item.file?.name || videoLabel(item.url || ''),
+        previewUrl: item.file ? URL.createObjectURL(item.file) : null,
+        isPending: true,
+        onRemove: () => {
           pendingMedia.videos.splice(index, 1);
           renderVideoList(saved);
-        }, true);
-      });
+        }
+      }));
+
+      list.appendChild(grid);
+    }
+
+    function youtubeId(url) {
+      const match = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+      return match ? match[1] : null;
+    }
+
+    // A readable stand-in when nobody named the video
+    function videoLabel(url) {
+      if (youtubeId(url)) return 'Видео с YouTube';
+      if (url.includes('rutube.ru')) return 'Видео с RuTube';
+      if (url.startsWith('/uploads/')) return 'Загруженный файл';
+      try {
+        return new URL(url).hostname.replace('www.', '');
+      } catch (error) {
+        return 'Видео';
+      }
+    }
+
+    function createVideoThumb(url, previewUrl) {
+      const id = youtubeId(url);
+      if (id) {
+        const cover = document.createElement('img');
+        cover.src = `https://img.youtube.com/vi/${id}/mqdefault.jpg`;
+        cover.alt = '';
+        return cover;
+      }
+
+      const source = previewUrl || (url.startsWith('/uploads/') ? url : null);
+      if (source) {
+        const video = document.createElement('video');
+        // The fragment nudges browsers into rendering the first frame as a poster
+        video.src = previewUrl ? source : source + '#t=0.1';
+        video.muted = true;
+        video.preload = 'metadata';
+        return video;
+      }
+
+      const placeholder = document.createElement('div');
+      placeholder.className = 'video-tile-placeholder';
+      placeholder.textContent = 'ВИДЕО';
+      return placeholder;
+    }
+
+    function openVideoPreview(url) {
+      const id = youtubeId(url);
+      const lightbox = el('#image-lightbox');
+      const image = el('#image-lightbox-img');
+      const player = el('#video-lightbox-player');
+      const frame = el('#video-lightbox-frame');
+
+      hide(image);
+      if (id || url.includes('rutube.ru')) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
+
+      player.src = url;
+      show(frame);
+      lightbox.classList.add('open');
+      player.play().catch(() => {});
     }
 
     async function addImageFiles(files) {
@@ -1060,13 +1194,20 @@
     }
 
     function openImagePreview(url) {
+      hide(el('#video-lightbox-frame'));
+      show(el('#image-lightbox-img'));
       el('#image-lightbox-img').src = url;
       el('#image-lightbox').classList.add('open');
     }
 
     function closeImagePreview() {
+      const player = el('#video-lightbox-player');
+      player.pause();
+      player.removeAttribute('src');
+
       el('#image-lightbox').classList.remove('open');
       el('#image-lightbox-img').src = '';
+      hide(el('#video-lightbox-frame'));
     }
 
     document.addEventListener('keydown', (e) => {
