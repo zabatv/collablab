@@ -143,7 +143,7 @@
           <!-- Gallery -->
           <div class="product-gallery">
             <div class="product-main-image">
-              <img id="main-image" src="${allImages[0]?.url || product.image}" alt="${product.name}" onerror="this.src='/placeholder.png'">
+              <img id="main-image" src="${allImages[0]?.url || product.image || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">
             </div>
             <div class="product-thumbnails" id="thumbnails"></div>
           </div>
@@ -219,7 +219,7 @@
       allImages.forEach((img, index) => {
         const thumb = document.createElement('div');
         thumb.className = 'product-thumbnail' + (index === 0 ? ' active' : '');
-        thumb.innerHTML = `<img src="${img.url}" alt="${img.alt || 'Фото ' + (index + 1)}" onerror="this.src='/placeholder.png'">`;
+        thumb.innerHTML = `<img src="${img.url || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">`;
         thumb.onclick = () => selectImage(index);
         thumbnailsDiv.appendChild(thumb);
       });

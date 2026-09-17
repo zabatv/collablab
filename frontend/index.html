@@ -45,8 +45,11 @@
   <!-- Categories Bar -->
   <nav class="category-bar">
     <div class="container">
-      <div class="category-bar-list" id="category-bar">
-        <span class="category-bar-loading">Загрузка категорий...</span>
+      <div class="category-bar-row">
+        <div class="category-bar-list" id="category-bar">
+          <span class="category-bar-loading">Загрузка категорий...</span>
+        </div>
+        <div id="category-more"></div>
       </div>
     </div>
   </nav>
@@ -59,7 +62,7 @@
         <p>Качественная электроника и гаджеты для вашей жизни. Более 1000 товаров от ведущих производителей.</p>
         <div class="hero-actions">
           <button class="btn btn-primary btn-lg" onclick="window.location.href='catalog.html'">СМОТРЕТЬ КАТАЛОГ</button>
-          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('featured').scrollIntoView({behavior: 'smooth'})">ПОПУЛЯРНЫЕ</button>
+          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('featured').scrollIntoView({behavior: 'smooth'})">ПО КАТЕГОРИЯМ</button>
         </div>
       </div>
     </div>
@@ -73,17 +76,10 @@
     </div>
   </div>
 
-  <!-- Featured Products -->
-  <section id="featured" class="container" style="padding: 48px 0;">
-    <h2 style="margin-bottom: 32px;">ПОПУЛЯРНЫЕ ТОВАРЫ</h2>
-    <div id="featured-products" class="grid grid-4"></div>
-  </section>
-
-  <!-- Categories Preview -->
-  <section class="container" style="padding: 48px 0;">
-    <h2 style="margin-bottom: 32px;">КАТЕГОРИИ</h2>
-    <div id="categories-grid" class="grid grid-3"></div>
-  </section>
+  <!-- Products by category -->
+  <div id="featured" class="container" style="padding: 48px 0;">
+    <div id="category-sections"></div>
+  </div>
 
   <!-- Footer -->
   <footer>
@@ -123,22 +119,12 @@
   <script src="js/api.js"></script>
   <script src="js/main.js"></script>
   <script>
-    // Load Featured Products and Categories
+    const PRODUCTS_PER_CATEGORY = 4;
+
     async function loadContent() {
+      const sections = el('#category-sections');
+
       try {
-        // Load products
-        const productsData = await ProductAPI.getProducts({ per_page: 8 });
-        const productsGrid = el('#featured-products');
-        clear(productsGrid);
-
-        if (productsData.products.length > 0) {
-          productsData.products.forEach(product => {
-            productsGrid.innerHTML += createProductCard(product);
-          });
-        } else {
-          productsGrid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
-        }
-
         // Categories come straight from the database, so a category created by
         // adding or importing a product shows up here without touching the code
         const categories = await ProductAPI.getCategories();
@@ -146,20 +132,72 @@
 
         renderCategoryBar(categories);
 
-        const categoriesGrid = el('#categories-grid');
-        clear(categoriesGrid);
+        const filled = categories.filter(category => category.product_count > 0);
+        if (filled.length === 0) {
+          sections.innerHTML = '<div class="empty-state"><p>Товары не найдены</p></div>';
+          return;
+        }
 
-        categories.forEach(category => {
-          categoriesGrid.innerHTML += `
-            <div class="card" style="cursor: pointer; text-align: center; padding: 48px 24px;" onclick="window.location.href='catalog.html?category=${category.id}'">
-              <h3>${category.name}</h3>
-              <p class="text-muted">${category.product_count} товаров</p>
-            </div>
-          `;
+        const batches = await Promise.all(filled.map(category =>
+          ProductAPI.getProducts({ category_id: category.id, per_page: PRODUCTS_PER_CATEGORY })
+        ));
+
+        clear(sections);
+        filled.forEach((category, index) => {
+          renderCategorySection(sections, category, batches[index].products);
         });
       } catch (error) {
         console.error('Error loading content:', error);
+        sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
       }
+    }
+
+    function renderCategorySection(container, category, products) {
+      if (products.length === 0) return;
+
+      const section = document.createElement('section');
+      section.className = 'category-section';
+
+      const header = document.createElement('div');
+      header.className = 'category-section-header';
+
+      const title = document.createElement('h2');
+      title.textContent = category.name;
+      header.appendChild(title);
+
+      const link = document.createElement('a');
+      link.className = 'category-section-link';
+      link.href = `catalog.html?category=${category.id}`;
+      link.textContent = `Все ${category.product_count} товаров`;
+      header.appendChild(link);
+
+      section.appendChild(header);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-4';
+      grid.innerHTML = products.map(product => createProductCard(product)).join('');
+      section.appendChild(grid);
+
+      container.appendChild(section);
+    }
+
+    const VISIBLE_CATEGORIES = 5;
+
+    function categoryLink(category, className = 'category-bar-item') {
+      const link = document.createElement('a');
+      link.className = className;
+      link.href = `catalog.html?category=${category.id}`;
+
+      const name = document.createElement('span');
+      name.textContent = category.name;
+      link.appendChild(name);
+
+      const count = document.createElement('span');
+      count.className = 'category-bar-count';
+      count.textContent = category.product_count;
+      link.appendChild(count);
+
+      return link;
     }
 
     function renderCategoryBar(categories) {
@@ -180,22 +218,36 @@
         return;
       }
 
-      categories.forEach(category => {
-        const link = document.createElement('a');
-        link.className = 'category-bar-item';
-        link.href = `catalog.html?category=${category.id}`;
+      // Categories arrive sorted by size, so the bar keeps the biggest ones
+      categories.slice(0, VISIBLE_CATEGORIES).forEach(category => bar.appendChild(categoryLink(category)));
 
-        const name = document.createElement('span');
-        name.textContent = category.name;
-        link.appendChild(name);
+      const moreHost = el('#category-more');
+      clear(moreHost);
 
-        const count = document.createElement('span');
-        count.className = 'category-bar-count';
-        count.textContent = category.product_count;
-        link.appendChild(count);
+      const rest = categories.slice(VISIBLE_CATEGORIES);
+      if (rest.length === 0) return;
 
-        bar.appendChild(link);
-      });
+      const more = document.createElement('div');
+      more.className = 'category-bar-more';
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'category-bar-item category-bar-toggle';
+      toggle.textContent = `ЕЩЁ (${rest.length})`;
+      toggle.onclick = (event) => {
+        event.stopPropagation();
+        more.classList.toggle('open');
+      };
+      more.appendChild(toggle);
+
+      const dropdown = document.createElement('div');
+      dropdown.className = 'category-bar-dropdown';
+      rest.forEach(category => dropdown.appendChild(categoryLink(category, 'category-bar-dropdown-item')));
+      more.appendChild(dropdown);
+
+      // Outside the scrolling list, or the dropdown would be clipped by it
+      moreHost.appendChild(more);
+      document.addEventListener('click', () => more.classList.remove('open'));
     }
 
     // Handle search

@@ -28,6 +28,15 @@ function clear(element) {
   if (element) element.innerHTML = '';
 }
 
+// Drawn inline: pointing a failed image at another file made the browser
+// request a missing placeholder over and over
+const NO_IMAGE = 'data:image/svg+xml,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240">' +
+  '<rect width="240" height="240" fill="#f2f2f2"/>' +
+  '<text x="120" y="126" font-family="Arial, sans-serif" font-size="15" fill="#999" ' +
+  'text-anchor="middle" letter-spacing="1">НЕТ ФОТО</text></svg>'
+);
+
 // Product Card Template
 function createProductCard(product) {
   const discount = product.discount;
@@ -37,7 +46,7 @@ function createProductCard(product) {
   return `
     <div class="card">
       <div class="card-image">
-        <img src="${product.image || '/placeholder.png'}" alt="${product.name}" onerror="this.src='/placeholder.png'">
+        <img src="${product.image || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">
         ${discount ? `<div class="card-badge">-${discount}%</div>` : ''}
       </div>
       <div class="card-content">

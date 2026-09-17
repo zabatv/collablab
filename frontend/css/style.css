@@ -184,6 +184,12 @@ header {
   border-bottom: 1px solid var(--color-border);
 }
 
+.category-bar-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--spacing-xs);
+}
+
 .category-bar-list {
   display: flex;
   align-items: stretch;
@@ -224,6 +230,87 @@ header {
   background: var(--color-gray);
   border-radius: 10px;
   padding: 1px 7px;
+}
+
+.category-section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.category-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--spacing-lg);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-section-link {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.category-section-link:hover {
+  text-decoration: underline;
+}
+
+.category-bar-more {
+  position: relative;
+}
+
+.category-bar-toggle {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.category-bar-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 240px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--color-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  z-index: 90;
+}
+
+.category-bar-more.open .category-bar-dropdown {
+  display: block;
+}
+
+.category-bar-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.category-bar-dropdown-item:last-child {
+  border-bottom: 0;
+}
+
+.category-bar-dropdown-item:hover {
+  background: var(--color-gray);
+  color: var(--color-accent);
 }
 
 .category-bar-loading {
