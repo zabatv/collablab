@@ -68,14 +68,6 @@
     </div>
   </section>
 
-  <!-- Search Results (hidden by default) -->
-  <div id="search-results" style="display: none; padding: 48px 0;">
-    <div class="container">
-      <h2>Результаты поиска</h2>
-      <div id="search-results-grid" class="grid grid-4" style="margin-top: 24px;"></div>
-    </div>
-  </div>
-
   <!-- Products by category -->
   <div id="featured" class="container" style="padding: 48px 0;">
     <div id="category-sections"></div>
@@ -250,39 +242,15 @@
       document.addEventListener('click', () => more.classList.remove('open'));
     }
 
-    // Handle search
-    async function handleSearch() {
+    // Searching opens the catalogue with the results, the same as from any other page
+    function handleSearch() {
       const query = el('#search-input').value.trim();
-
-      if (query.length < 2) {
-        hide(el('#search-results'));
-        return;
-      }
-
-      try {
-        const results = await ProductAPI.search(query);
-        const resultsGrid = el('#search-results-grid');
-        clear(resultsGrid);
-
-        show(el('#search-results'));
-
-        if (results.length > 0) {
-          results.forEach(product => {
-            resultsGrid.innerHTML += createProductCard(product);
-          });
-        } else {
-          resultsGrid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
-        }
-      } catch (error) {
-        console.error('Search error:', error);
+      if (query.length >= 2) {
+        window.location.href = `catalog.html?search=${encodeURIComponent(query)}`;
       }
     }
 
-    initSearchBar({
-      onSearch: handleSearch,
-      onClear: () => hide(el('#search-results')),
-      live: true
-    });
+    initSearchBar({ onSearch: handleSearch });
 
     // Load on page load
     loadContent();
