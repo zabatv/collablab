@@ -1076,12 +1076,6 @@ def seo_technical():
         return bool(present) and all(fragment in html for html in present.values())
 
     checks = [
-        {'key': 'robots', 'title': 'robots.txt',
-         'ok': os.path.exists(os.path.join(frontend, 'robots.txt')),
-         'why': 'Говорит роботу, что индексировать, и где искать карту сайта'},
-        {'key': 'sitemap', 'title': 'sitemap.xml',
-         'ok': os.path.exists(os.path.join(frontend, 'sitemap.xml')),
-         'why': 'Список всех страниц, чтобы робот не искал их сам'},
         {'key': 'description', 'title': 'Описание страниц (meta description)',
          'ok': every_page_has('name="description"'),
          'why': 'Текст под заголовком в результатах поиска'},
