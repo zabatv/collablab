@@ -150,10 +150,15 @@ h4 {
 header {
   background: var(--color-secondary);
   border-bottom: 1px solid var(--color-border);
-  padding: var(--spacing-md) 0;
   position: sticky;
   top: 0;
   z-index: 100;
+}
+
+/* The padding belongs to this row, not to the header, or the search box ends up
+   flush against the strip above it while empty space sits over that strip */
+.header-main {
+  padding: var(--spacing-md) 0;
 }
 
 .header-top {
@@ -165,9 +170,10 @@ header {
 }
 
 .logo {
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-2xl);
   font-weight: 800;
-  letter-spacing: -1px;
+  letter-spacing: -1.5px;
+  line-height: 1;
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -175,8 +181,8 @@ header {
 }
 
 .logo img {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
 }
 
 .category-bar {
@@ -261,6 +267,8 @@ header {
 
 .category-bar-more {
   position: relative;
+  /* The list scrolls underneath, so this needs its own background */
+  background: var(--color-secondary);
 }
 
 .category-bar-toggle {
@@ -1048,7 +1056,7 @@ footer {
   }
 
   .logo {
-    font-size: var(--font-size-lg);
+    font-size: 24px;
   }
 
   .product-actions {
