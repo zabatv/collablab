@@ -8,7 +8,11 @@ from functools import wraps
 import io
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.drawing.image import Image as XLImage
 import requests
+import zipfile
+import posixpath
+from xml.etree import ElementTree as ET
 
 app = Flask(__name__)
 CORS(app)
@@ -39,6 +43,14 @@ def require_admin(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def save_image_bytes(product_id, data, ext):
+    """Store raw image bytes in the uploads folder. Returns '/uploads/<name>'."""
+    filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    with open(filepath, 'wb') as f:
+        f.write(data)
+    return f'/uploads/{filename}'
+
 def download_image_to_uploads(product_id, url):
     """Download an image from a URL and save it to the uploads folder.
     Returns the stored path (e.g. '/uploads/xyz.jpg') or None if it fails."""
@@ -55,12 +67,77 @@ def download_image_to_uploads(product_id, url):
     elif 'webp' in content_type: ext = '.webp'
     elif 'gif' in content_type: ext = '.gif'
 
-    filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    with open(filepath, 'wb') as f:
-        f.write(resp.content)
+    return save_image_bytes(product_id, resp.content, ext)
 
-    return f'/uploads/{filename}'
+def product_image_path(product):
+    """Absolute path of a product's main image file, or None when unavailable."""
+    if not product.image or not product.image.startswith('/uploads/'):
+        return None
+    path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(product.image))
+    return path if os.path.exists(path) else None
+
+PHOTO_CELL_SIZE = 96  # pixels, for pictures embedded in exported spreadsheets
+
+XL_NS = {
+    'main': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main',
+    'rel': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+    'xdr': 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing',
+    'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+}
+
+def extract_embedded_images(file_bytes, sheet_title):
+    """Map Excel row number -> (image bytes, extension) for pictures anchored in a sheet.
+
+    Pictures pasted into a sheet are stored as drawings rather than cell values,
+    so they are read straight from the xlsx package."""
+    images = {}
+
+    with zipfile.ZipFile(io.BytesIO(file_bytes)) as z:
+        names = set(z.namelist())
+
+        def rels_for(part):
+            base, filename = part.rsplit('/', 1)
+            rels_path = f'{base}/_rels/{filename}.rels'
+            if rels_path not in names:
+                return {}
+            # Targets are either relative to the part or absolute from the package root
+            return {
+                rel.get('Id'): posixpath.normpath(
+                    posixpath.join(base, rel.get('Target'))
+                ).lstrip('/')
+                for rel in ET.fromstring(z.read(rels_path))
+            }
+
+        book_rels = rels_for('xl/workbook.xml')
+        sheet_part = None
+        for sheet in ET.fromstring(z.read('xl/workbook.xml')).iter(f"{{{XL_NS['main']}}}sheet"):
+            if sheet.get('name') == sheet_title:
+                sheet_part = book_rels.get(sheet.get(f"{{{XL_NS['rel']}}}id"))
+                break
+
+        if not sheet_part or sheet_part not in names:
+            return images
+
+        drawing_part = next((t for t in rels_for(sheet_part).values() if '/drawings/' in t), None)
+        if not drawing_part or drawing_part not in names:
+            return images
+
+        drawing_rels = rels_for(drawing_part)
+        for anchor in ET.fromstring(z.read(drawing_part)):
+            origin = anchor.find('xdr:from', XL_NS)
+            blip = anchor.find('.//a:blip', XL_NS)
+            if origin is None or blip is None:
+                continue
+
+            row = int(origin.find('xdr:row', XL_NS).text) + 1
+            media = drawing_rels.get(blip.get(f"{{{XL_NS['rel']}}}embed"))
+            if row in images or not media or media not in names:
+                continue
+
+            ext = os.path.splitext(media)[1].lower() or '.jpg'
+            images[row] = (z.read(media), ext)
+
+    return images
 
 # ===== API Routes =====
 
@@ -379,7 +456,9 @@ def export_excel():
     )
 
     # Headers
-    headers = ['ID', 'SKU', 'Название', 'Описание', 'Категория', 'Бренд', 'Цена', 'Старая цена', 'Остаток', 'Активен']
+    headers = ['ID', 'Артикул', 'Название', 'Фото товара', 'Описание', 'Категория', 'Бренд',
+               'Цена', 'Старая цена', 'Остаток', 'Активен']
+    photo_col = headers.index('Фото товара') + 1
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
@@ -389,11 +468,13 @@ def export_excel():
 
     # Data
     products = Product.query.all()
+    rows_with_photo = []
     for row, product in enumerate(products, 2):
         data = [
             product.id,
             product.sku,
             product.name,
+            '',
             product.description or '',
             product.category.name if product.category else '',
             product.brand.name if product.brand else '',
@@ -405,15 +486,30 @@ def export_excel():
         for col, value in enumerate(data, 1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.border = thin_border
-            if col in [7, 8]:  # Price columns
+            if col in [8, 9]:  # Price columns
                 cell.number_format = '#,##0.00'
-            elif col == 9:  # Stock
+            elif col == 10:  # Stock
                 cell.number_format = '#,##0'
+
+        image_path = product_image_path(product)
+        if image_path:
+            picture = XLImage(image_path)
+            picture.width = PHOTO_CELL_SIZE
+            picture.height = PHOTO_CELL_SIZE
+            ws.add_image(picture, f'{openpyxl.utils.get_column_letter(photo_col)}{row}')
+            rows_with_photo.append(row)
 
     # Auto-adjust column widths
     for col in range(1, len(headers) + 1):
+        if col == photo_col:
+            continue
         max_length = max(len(str(ws.cell(row=r, column=col).value or '')) for r in range(1, ws.max_row + 1))
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = min(max_length + 2, 50)
+
+    # Give embedded pictures room to show
+    ws.column_dimensions[openpyxl.utils.get_column_letter(photo_col)].width = PHOTO_CELL_SIZE / 7
+    for row in rows_with_photo:
+        ws.row_dimensions[row].height = PHOTO_CELL_SIZE * 0.78
 
     # Save to buffer
     output = io.BytesIO()
@@ -439,76 +535,87 @@ def import_excel():
         return jsonify({'error': 'Поддерживаются только файлы .xlsx'}), 400
 
     try:
-        wb = openpyxl.load_workbook(file)
+        file_bytes = file.read()
+        # data_only pulls the values Excel cached for formula cells (prices are often formulas)
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
         ws = wb.active
+        header_row = 1
 
-        # Step 1: Auto-detect columns by scanning data patterns (most reliable)
-        sku_col = None
-        name_col = None
-        price_col = None
+        def header_of(col):
+            raw = ws.cell(row=header_row, column=col).value
+            return str(raw).lower().strip() if raw is not None else ''
 
+        def column_values(col):
+            sample = [ws.cell(row=r, column=col).value for r in range(2, min(500, ws.max_row + 1))]
+            return [s for s in sample if s is not None and str(s).strip()]
+
+        def find_by_header(*keywords, numeric=False):
+            """First column whose header matches a keyword and that actually holds data."""
+            for col in range(1, ws.max_column + 1):
+                header = header_of(col)
+                if not any(k in header for k in keywords):
+                    continue
+                values = column_values(col)
+                if numeric:
+                    values = [v for v in values if isinstance(v, (int, float))]
+                if values:
+                    return col
+            return None
+
+        # Step 1: named columns win, since headers say what a column means
+        name_col = find_by_header('наименование', 'название', 'name', 'товар')
+        sku_col = find_by_header('артикул', 'sku', 'код')
+        price_col = find_by_header('розничная', 'цена', 'price', numeric=True)
+        category_col = find_by_header('категория', 'category')
+        brand_col = find_by_header('бренд', 'brand')
+        old_price_col = find_by_header('старая', 'old')
+        stock_col = find_by_header('остаток', 'количество', 'кол-во', 'stock')
+        desc_col = find_by_header('описание', 'description')
+        image_col = find_by_header('изображен', 'картин', 'фото', 'image', 'photo')
+
+        if old_price_col == price_col:
+            old_price_col = None
+
+        # Rows may lack a retail price; a cost column then serves as the fallback,
+        # preferring one already stated in roubles over another currency
+        cost_cols = [
+            col for col in range(1, ws.max_column + 1)
+            if any(k in header_of(col) for k in ('себестоимость', 'стоимость', 'cost'))
+            and any(isinstance(v, (int, float)) for v in column_values(col))
+        ]
+        price_fallback_col = next(
+            (col for col in cost_cols if 'руб' in header_of(col) or '₽' in header_of(col)),
+            cost_cols[0] if cost_cols else None
+        )
+        if not price_col:
+            price_col, price_fallback_col = price_fallback_col, None
+
+        # Step 2: fall back to data patterns for the columns headers did not name
+        NON_PRICE_HEADERS = ('вес', 'weight', 'курс', 'rate', 'контакт', 'id', 'артикул', 'остаток')
         for col in range(1, min(ws.max_column + 1, 25)):
-            sample = [ws.cell(row=r, column=col).value for r in range(2, min(20, ws.max_row + 1))]
-            non_empty = [s for s in sample if s is not None and str(s).strip()]
-
+            non_empty = column_values(col)
             if not non_empty:
                 continue
 
-            # SKU: short alphanumeric strings like TKC-PY-4
             if not sku_col and all(isinstance(s, str) and 2 <= len(s) <= 30 for s in non_empty[:5]):
                 if any(any(c.isalpha() for c in str(s)) for s in non_empty[:3]):
                     sku_col = col
 
-            # Name: long text strings (>10 chars)
             if not name_col and all(isinstance(s, str) and len(s) > 10 for s in non_empty[:3]):
                 name_col = col
 
-            # Price: numeric values > 1
             numeric_vals = [s for s in non_empty if isinstance(s, (int, float)) and s > 1]
-            if not price_col and len(numeric_vals) >= 3:
+            if (not price_col and len(numeric_vals) >= 3
+                    and col not in (sku_col, name_col, stock_col, old_price_col)
+                    and not any(k in header_of(col) for k in NON_PRICE_HEADERS)):
                 price_col = col
 
-        # Fallback defaults
         if not name_col:
             name_col = 1
         if not sku_col:
-            sku_col = 2 if sku_col != 2 else 3
-        if not price_col:
-            for col in range(4, min(ws.max_column + 1, 25)):
-                sample = [ws.cell(row=r, column=col).value for r in range(2, min(20, ws.max_row + 1))]
-                numeric_vals = [s for s in sample if isinstance(s, (int, float)) and s > 1]
-                if len(numeric_vals) >= 3:
-                    price_col = col
-                    break
+            sku_col = 2 if name_col != 2 else 3
 
-        # Step 2: Try to detect extra columns from header row (best effort)
-        header_row = 1
-        desc_col = None
-        category_col = None
-        brand_col = None
-        old_price_col = None
-        stock_col = None
-        image_col = None
-
-        for col in range(1, ws.max_column + 1):
-            if col in [sku_col, name_col, price_col]:
-                continue
-            cell_raw = ws.cell(row=header_row, column=col).value
-            if cell_raw is None:
-                continue
-            cell_value = str(cell_raw).lower().strip()
-            if not cell_value:
-                continue
-            if 'категория' in cell_value or 'category' in cell_value or 'тип' in cell_value:
-                category_col = col
-            elif 'бренд' in cell_value or 'brand' in cell_value:
-                brand_col = col
-            elif 'старая' in cell_value or 'old' in cell_value:
-                old_price_col = col
-            elif 'остаток' in cell_value or 'кол' in cell_value or 'stock' in cell_value or 'количество' in cell_value:
-                stock_col = col
-            elif 'изображен' in cell_value or 'картин' in cell_value or 'фото' in cell_value or 'image' in cell_value or 'photo' in cell_value:
-                image_col = col
+        embedded_images = extract_embedded_images(file_bytes, ws.title)
 
         imported = 0
         updated = 0
@@ -549,16 +656,19 @@ def import_excel():
 
                 # Get price
                 price = 0
-                if price_col:
-                    price_val = ws.cell(row=row, column=price_col).value
-                    if price_val:
+                for col in (price_col, price_fallback_col):
+                    if not col:
+                        continue
+                    price_val = ws.cell(row=row, column=col).value
+                    if isinstance(price_val, (int, float)):
                         price = float(price_val)
+                        break
 
                 # Get old price
                 old_price = None
                 if old_price_col:
                     old_price_val = ws.cell(row=row, column=old_price_col).value
-                    if old_price_val:
+                    if isinstance(old_price_val, (int, float)):
                         old_price = float(old_price_val)
 
                 # Get stock
@@ -616,9 +726,15 @@ def import_excel():
                     db.session.flush()
                     imported += 1
 
-                if image_url and image_url.startswith(('http://', 'https://')) and not product.image:
+                if not product.image:
                     try:
-                        stored_path = download_image_to_uploads(product.id, image_url)
+                        stored_path = None
+                        if image_url.startswith(('http://', 'https://')):
+                            stored_path = download_image_to_uploads(product.id, image_url)
+                        elif row in embedded_images:
+                            data, ext = embedded_images[row]
+                            stored_path = save_image_bytes(product.id, data, ext)
+
                         if stored_path:
                             product.image = stored_path
                             db.session.add(ProductImage(
@@ -627,7 +743,7 @@ def import_excel():
                                 order=0
                             ))
                     except Exception as img_error:
-                        errors.append(f"Строка {row}: не удалось скачать картинку ({img_error})")
+                        errors.append(f"Строка {row}: не удалось сохранить картинку ({img_error})")
 
             except Exception as e:
                 errors.append(f"Строка {row}: {str(e)}")

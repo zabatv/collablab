@@ -91,6 +91,65 @@
       background: #f9f9f9;
     }
 
+    .table-thumb {
+      width: 56px;
+      height: 56px;
+      object-fit: cover;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      display: block;
+      cursor: zoom-in;
+      background: #f5f5f5;
+    }
+
+    .table-thumb-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--color-gray-dark);
+      text-align: center;
+      cursor: default;
+    }
+
+    .image-preview-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .image-preview-grid img {
+      width: 96px;
+      height: 96px;
+      object-fit: cover;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      cursor: zoom-in;
+      background: #f5f5f5;
+    }
+
+    .image-lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 24px;
+      cursor: zoom-out;
+    }
+
+    .image-lightbox.open {
+      display: flex;
+    }
+
+    .image-lightbox img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+
     .admin-form {
       background: #f9f9f9;
       padding: 24px;
@@ -227,6 +286,7 @@
           <table style="width: 100%;">
             <thead>
               <tr>
+                <th>Фото</th>
                 <th>SKU</th>
                 <th>Название</th>
                 <th>Категория</th>
@@ -237,7 +297,7 @@
             </thead>
             <tbody id="products-table-body">
               <tr>
-                <td colspan="6" class="loading">Загрузка...</td>
+                <td colspan="7" class="loading">Загрузка...</td>
               </tr>
             </tbody>
           </table>
@@ -342,6 +402,11 @@
     </div>
   </div>
 
+  <!-- Image Lightbox -->
+  <div class="image-lightbox" id="image-lightbox" onclick="closeImagePreview()">
+    <img id="image-lightbox-img" src="" alt="">
+  </div>
+
   <!-- Add Category Modal -->
   <div class="modal" id="category-modal">
     <div class="modal-content">
@@ -430,6 +495,11 @@
         data.products.forEach(product => {
           tbody.innerHTML += `
             <tr>
+              <td>
+                ${product.image
+                  ? `<img src="${product.image}" alt="" class="table-thumb" onclick="openImagePreview('${product.image}')">`
+                  : '<span class="table-thumb table-thumb-empty">нет фото</span>'}
+              </td>
               <td>${product.sku}</td>
               <td>${product.name}</td>
               <td>${product.category?.name || '-'}</td>
@@ -512,7 +582,9 @@
 
         show(el('#product-images'));
         el('#product-images-list').innerHTML = product.images.length > 0
-          ? product.images.map((img, i) => `<div style="margin: 8px 0;"><img src="${img.url}" style="max-width: 100px; max-height: 100px;"> <small>${img.alt}</small></div>`).join('')
+          ? `<div class="image-preview-grid">${product.images.map(img =>
+              `<img src="${img.url}" alt="" onclick="openImagePreview('${img.url}')">`
+            ).join('')}</div>`
           : '<p class="text-muted">Нет фото</p>';
 
         el('#product-modal').classList.add('active');
@@ -525,6 +597,20 @@
       el('#product-modal').classList.remove('active');
       currentProductId = null;
     }
+
+    function openImagePreview(url) {
+      el('#image-lightbox-img').src = url;
+      el('#image-lightbox').classList.add('open');
+    }
+
+    function closeImagePreview() {
+      el('#image-lightbox').classList.remove('open');
+      el('#image-lightbox-img').src = '';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeImagePreview();
+    });
 
     el('#product-form').addEventListener('submit', async (e) => {
       e.preventDefault();
