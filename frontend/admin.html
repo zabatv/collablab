@@ -634,17 +634,11 @@
     let currentProductId = null;
     let currentProductsPage = 1;
 
-    // Check authentication
-    window.addEventListener('load', () => {
-      const adminKey = localStorage.getItem('admin_key');
-      if (!adminKey) {
-        const key = prompt('Введите ключ администратора:');
-        if (key) {
-          localStorage.setItem('admin_key', key);
-          location.reload();
-        } else {
-          window.location.href = 'index.html';
-        }
+    // Nothing loads until the session is confirmed
+    window.addEventListener('load', async () => {
+      if (!await AuthAPI.isSignedIn()) {
+        window.location.replace('login.html');
+        return;
       }
 
       loadProducts();
@@ -1029,7 +1023,7 @@
     async function downloadImageByUrl(productId, url) {
       const response = await fetch(`${API_BASE}/admin/products/${productId}/set-image-url`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': localStorage.getItem('admin_key') },
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
         body: JSON.stringify({ url })
       });
 
@@ -1302,10 +1296,9 @@
       if (!url || !currentProductId) return;
 
       try {
-        const adminKey = localStorage.getItem('admin_key');
         const response = await fetch(`${API_BASE}/admin/products/${currentProductId}/set-image-url`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
           body: JSON.stringify({ url })
         });
 
@@ -1416,17 +1409,17 @@
       }
     });
 
-    function logout() {
-      localStorage.removeItem('admin_key');
-      window.location.href = 'index.html';
+    async function logout() {
+      // Tell the server to drop the session, not just the browser
+      await AuthAPI.logout();
+      window.location.replace('login.html');
     }
 
     // Excel Export
     async function exportToExcel() {
       try {
-        const adminKey = localStorage.getItem('admin_key');
         const response = await fetch(`${API_BASE}/admin/export/excel`, {
-          headers: { 'X-Admin-Key': adminKey }
+          headers: authHeader()
         });
 
         if (!response.ok) throw new Error('Ошибка экспорта');
@@ -1458,13 +1451,12 @@
       }
 
       try {
-        const adminKey = localStorage.getItem('admin_key');
         const formData = new FormData();
         formData.append('file', file);
 
         const response = await fetch(`${API_BASE}/admin/import/excel`, {
           method: 'POST',
-          headers: { 'X-Admin-Key': adminKey },
+          headers: authHeader(),
           body: formData
         });
 

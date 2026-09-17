@@ -4,8 +4,10 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from models import db, Product, Category, Brand, ProductImage, ProductVideo, Specification
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
-from datetime import datetime
+import secrets
+from datetime import datetime, timedelta
 from functools import wraps
 import io
 import openpyxl
@@ -41,17 +43,118 @@ def register_unicode_lower(dbapi_connection, connection_record):
         dbapi_connection.create_function(
             'lower', 1, lambda value: value.lower() if isinstance(value, str) else value)
 
-# Admin authentication (простая защита)
-ADMIN_KEY = os.getenv('ADMIN_KEY', 'admin_secret_key_2024')
+# ===== ADMIN AUTHENTICATION =====
+#
+# Credentials come from the environment and never from the source: a default
+# password in a public repository is an open door to every deployment that
+# forgot to override it. Without both variables set, nobody can sign in.
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', '').strip()
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
+
+# Only the hash is kept in memory; the plain password is not held after startup
+ADMIN_PASSWORD_HASH = generate_password_hash(ADMIN_PASSWORD) if ADMIN_PASSWORD else None
+AUTH_CONFIGURED = bool(ADMIN_USERNAME and ADMIN_PASSWORD_HASH)
+
+if not AUTH_CONFIGURED:
+    print('ВНИМАНИЕ: ADMIN_USERNAME и ADMIN_PASSWORD не заданы — вход в админку закрыт.')
+
+SESSION_LIFETIME = timedelta(hours=12)
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT = timedelta(minutes=15)
+
+# Sessions live in memory: a restart signs everyone out, which is acceptable
+# here and avoids persisting anything that grants access
+active_sessions = {}
+failed_logins = {}
+
+def issue_session():
+    token = secrets.token_urlsafe(32)
+    active_sessions[token] = datetime.utcnow() + SESSION_LIFETIME
+    return token
+
+def constant_time_equal(left, right):
+    """compare_digest rejects strings holding non-ASCII, so compare their bytes"""
+    return secrets.compare_digest(left.encode('utf-8'), right.encode('utf-8'))
+
+def session_is_valid(token):
+    if not token:
+        return False
+
+    # Compare against every known token in constant time, so a wrong token
+    # cannot be narrowed down by how long the answer takes
+    match = None
+    for known in list(active_sessions):
+        if constant_time_equal(known, token):
+            match = known
+
+    if match is None:
+        return False
+
+    if datetime.utcnow() > active_sessions[match]:
+        active_sessions.pop(match, None)
+        return False
+
+    return True
+
+def login_blocked(client):
+    attempts, blocked_until = failed_logins.get(client, (0, None))
+    return blocked_until is not None and datetime.utcnow() < blocked_until
+
+def record_failed_login(client):
+    attempts, _ = failed_logins.get(client, (0, None))
+    attempts += 1
+    blocked_until = datetime.utcnow() + LOGIN_LOCKOUT if attempts >= LOGIN_MAX_ATTEMPTS else None
+    failed_logins[client] = (attempts, blocked_until)
 
 def require_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        key = request.headers.get('X-Admin-Key')
-        if key != ADMIN_KEY:
-            return jsonify({'error': 'Unauthorized'}), 401
+        header = request.headers.get('Authorization', '')
+        token = header[7:] if header.startswith('Bearer ') else None
+
+        if not session_is_valid(token):
+            return jsonify({'error': 'Требуется вход'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    """Exchange credentials for a session token"""
+    if not AUTH_CONFIGURED:
+        return jsonify({'error': 'Вход не настроен на сервере'}), 503
+
+    client = request.remote_addr or 'unknown'
+    if login_blocked(client):
+        return jsonify({'error': 'Слишком много попыток. Попробуйте через 15 минут'}), 429
+
+    data = request.get_json(silent=True) or {}
+    username = str(data.get('username', '')).strip()
+    password = str(data.get('password', ''))
+
+    username_ok = constant_time_equal(username, ADMIN_USERNAME)
+    password_ok = check_password_hash(ADMIN_PASSWORD_HASH, password)
+
+    # One message for both cases, so a wrong name cannot be told from a wrong password
+    if not (username_ok and password_ok):
+        record_failed_login(client)
+        return jsonify({'error': 'Неверный логин или пароль'}), 401
+
+    failed_logins.pop(client, None)
+    return jsonify({'token': issue_session(), 'expires_in': int(SESSION_LIFETIME.total_seconds())})
+
+@app.route('/api/auth/logout', methods=['POST'])
+@require_admin
+def logout():
+    """Revoke the current session token"""
+    header = request.headers.get('Authorization', '')
+    active_sessions.pop(header[7:], None)
+    return '', 204
+
+@app.route('/api/auth/check', methods=['GET'])
+@require_admin
+def auth_check():
+    """Used by the admin page to confirm a stored token still works"""
+    return jsonify({'ok': True})
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 VIDEO_EXTENSIONS = {'.mp4', '.webm', '.ogg', '.ogv', '.mov', '.m4v'}
@@ -858,4 +961,7 @@ if __name__ == '__main__':
         db.create_all()
         print("Database initialized!")
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Debug must be opted into: the Werkzeug debugger hands an interactive Python
+    # console to anyone who can reach the port and trigger an error
+    debug = os.getenv('FLASK_DEBUG', '0').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug, host=os.getenv('HOST', '0.0.0.0'), port=int(os.getenv('PORT', 5000)))

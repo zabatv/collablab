@@ -1,12 +1,61 @@
 // API Helper Functions
 const API_BASE = 'http://45.143.93.41:5000/api';
 
+// The browser holds a session token, never the password
+const TOKEN_KEY = 'admin_token';
+
+function adminToken() {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
+
+function authHeader() {
+  return { 'Authorization': `Bearer ${adminToken()}` };
+}
+
+const AuthAPI = {
+  login: async (username, password) => {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.error || `Сервер ответил ошибкой ${response.status}`);
+    }
+
+    localStorage.setItem(TOKEN_KEY, result.token);
+    return result;
+  },
+
+  logout: async () => {
+    try {
+      await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: authHeader() });
+    } finally {
+      localStorage.removeItem(TOKEN_KEY);
+    }
+  },
+
+  isSignedIn: async () => {
+    if (!adminToken()) return false;
+    try {
+      const response = await fetch(`${API_BASE}/auth/check`, { headers: authHeader() });
+      if (!response.ok) localStorage.removeItem(TOKEN_KEY);
+      return response.ok;
+    } catch (error) {
+      // A server that cannot be reached is not proof the token went bad
+      return true;
+    }
+  }
+};
+
 // XHR rather than fetch: only XHR reports how much of the file has gone out
 function uploadWithProgress(url, formData, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
-    xhr.setRequestHeader('X-Admin-Key', localStorage.getItem('admin_key'));
+    xhr.setRequestHeader('Authorization', `Bearer ${adminToken()}`);
 
     xhr.upload.onprogress = (event) => {
       if (onProgress && event.lengthComputable) {
@@ -96,12 +145,12 @@ const ProductAPI = {
 // Admin API
 const AdminAPI = {
   getProducts: (page = 1) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall(`/admin/products?page=${page}`, { headers });
   },
 
   createProduct: (data) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall('/admin/products', {
       method: 'POST',
       headers,
@@ -110,7 +159,7 @@ const AdminAPI = {
   },
 
   updateProduct: (id, data) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall(`/admin/products/${id}`, {
       method: 'PUT',
       headers,
@@ -119,7 +168,7 @@ const AdminAPI = {
   },
 
   deleteProduct: (id) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall(`/admin/products/${id}`, {
       method: 'DELETE',
       headers
@@ -144,7 +193,7 @@ const AdminAPI = {
   },
 
   addVideo: (productId, data) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall(`/admin/products/${productId}/upload-video`, {
       method: 'POST',
       headers,
@@ -153,7 +202,7 @@ const AdminAPI = {
   },
 
   deleteVideo: (productId, videoId) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall(`/admin/products/${productId}/videos/${videoId}`, {
       method: 'DELETE',
       headers
@@ -161,12 +210,12 @@ const AdminAPI = {
   },
 
   getCategories: () => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall('/admin/categories', { headers });
   },
 
   createCategory: (data) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall('/admin/categories', {
       method: 'POST',
       headers,
@@ -175,12 +224,12 @@ const AdminAPI = {
   },
 
   getBrands: () => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall('/admin/brands', { headers });
   },
 
   createBrand: (data) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
+    const headers = authHeader();
     return apiCall('/admin/brands', {
       method: 'POST',
       headers,

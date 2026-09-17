@@ -179,9 +179,18 @@ Then open: `http://localhost:8000`
 
 ### Access Admin Panel
 
-1. Navigate to: `http://localhost:8000/admin.html`
-2. Enter the admin key when prompted (default: `admin_secret_key_2024`)
-3. Key is stored in localStorage for convenience
+1. Navigate to: `http://localhost:8000/login.html` (served as `/login` behind nginx)
+2. Sign in with the username and password from the backend `.env` file
+3. A session token is stored in the browser and expires after 12 hours
+
+Credentials live only in `.env`, which is not tracked by git:
+
+```
+ADMIN_USERNAME=your-name
+ADMIN_PASSWORD=long-random-password   # openssl rand -base64 24
+```
+
+Without both variables set, nobody can sign in — there is no default password.
 
 ### Admin Features
 
@@ -437,9 +446,10 @@ pip install -r requirements.txt
 **Error:** 401 Unauthorized when accessing admin routes
 
 **Solution:**
-- Verify key matches the one in backend `.env` file
-- Clear browser localStorage and re-enter key
-- Default key is: `admin_secret_key_2024`
+- Check `ADMIN_USERNAME` and `ADMIN_PASSWORD` in the backend `.env` file
+- Restart the backend after changing them
+- After five wrong attempts the address is blocked for 15 minutes
+- Sessions are held in memory, so restarting the backend signs everyone out
 
 ## Database Schema
 

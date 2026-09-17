@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Вход - ROBOT</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .login-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: var(--color-gray);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--color-secondary);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      padding: 32px;
+    }
+
+    .login-logo {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1;
+      text-align: center;
+    }
+
+    .login-subtitle {
+      margin: 8px 0 28px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-gray-dark);
+    }
+
+    .login-field {
+      margin-bottom: 16px;
+    }
+
+    .login-field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .login-field input {
+      width: 100%;
+      height: 42px;
+      padding: 0 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+    }
+
+    .login-field input:focus {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.13);
+    }
+
+    .login-submit {
+      width: 100%;
+      height: 44px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--color-primary);
+      color: var(--color-secondary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background-color 150ms ease, transform 160ms ease-out;
+    }
+
+    .login-submit:active {
+      transform: scale(0.98);
+    }
+
+    .login-submit:disabled {
+      opacity: 0.6;
+      cursor: default;
+      transform: none;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .login-submit:not(:disabled):hover {
+        background: var(--color-accent);
+      }
+    }
+
+    .login-error {
+      display: none;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      background: #ffe9e7;
+      color: #c0261a;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+
+    .login-back {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--color-gray-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-page">
+    <form class="login-card" id="login-form" autocomplete="on">
+      <div class="login-logo">ROBOT</div>
+      <p class="login-subtitle">Панель управления каталогом</p>
+
+      <div class="login-error" id="login-error"></div>
+
+      <div class="login-field">
+        <label for="login-username">Логин</label>
+        <input type="text" id="login-username" name="username" autocomplete="username" required autofocus>
+      </div>
+
+      <div class="login-field">
+        <label for="login-password">Пароль</label>
+        <input type="password" id="login-password" name="password" autocomplete="current-password" required>
+      </div>
+
+      <button type="submit" class="login-submit" id="login-submit">ВОЙТИ</button>
+
+      <a href="index.html" class="login-back">Вернуться на сайт</a>
+    </form>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    const form = el('#login-form');
+    const errorBox = el('#login-error');
+    const submitBtn = el('#login-submit');
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.classList.add('visible');
+    }
+
+    // Already signed in: skip the form
+    AuthAPI.isSignedIn().then(signedIn => {
+      if (signedIn) window.location.replace('admin.html');
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      errorBox.classList.remove('visible');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'ПРОВЕРЯЕМ...';
+
+      try {
+        await AuthAPI.login(el('#login-username').value.trim(), el('#login-password').value);
+        window.location.replace('admin.html');
+      } catch (error) {
+        showError(error.message);
+        el('#login-password').value = '';
+        el('#login-password').focus();
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'ВОЙТИ';
+      }
+    });
+  </script>
+</body>
+</html>

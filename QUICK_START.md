@@ -93,8 +93,8 @@ Go to: **http://localhost:8000**
 - Search for products using search bar
 
 ### Admin Panel
-- Click "АДМИН" button
-- Enter admin key: `admin_secret_key_2024` (when prompted)
+- Open `/login` (or `login.html`)
+- Sign in with ADMIN_USERNAME and ADMIN_PASSWORD from backend `.env`
 - Add categories, brands, and products
 - Upload product images
 

@@ -63,23 +63,8 @@ function createProductCard(product) {
   `;
 }
 
-// Initialize App
-async function initApp() {
-  console.log('App initialized');
-
-  // Check admin key
-  if (window.location.pathname.includes('admin')) {
-    const adminKey = localStorage.getItem('admin_key');
-    if (!adminKey) {
-      const key = prompt('Введите ключ администратора:');
-      if (key) {
-        localStorage.setItem('admin_key', key);
-      } else {
-        window.location.href = 'index.html';
-      }
-    }
-  }
-}
+// The admin page checks its own session on load, so nothing to do here
+async function initApp() {}
 
 // Show notifications
 function showNotification(message, type = 'success') {
