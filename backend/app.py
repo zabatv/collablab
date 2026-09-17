@@ -411,6 +411,9 @@ def create_product():
         )
 
         db.session.add(product)
+        db.session.flush()
+
+        replace_specifications(product.id, data.get('specifications', ''))
         db.session.commit()
 
         return jsonify(product.to_dict(full=True)), 201
@@ -435,6 +438,9 @@ def update_product(product_id):
         product.stock = data.get('stock', product.stock)
         product.is_active = data.get('is_active', product.is_active)
         product.updated_at = datetime.utcnow()
+
+        if 'specifications' in data:
+            replace_specifications(product.id, data['specifications'])
 
         db.session.commit()
         return jsonify(product.to_dict(full=True))
@@ -645,6 +651,12 @@ SPEC_SEPARATORS = (':', '=', '—', '-')
 
 def format_specifications(specifications):
     return '\n'.join(f'{spec.name}: {spec.value}' for spec in specifications)
+
+def replace_specifications(product_id, text):
+    """Swap a product's specifications for the ones in the text. Does not commit."""
+    Specification.query.filter_by(product_id=product_id).delete()
+    for name, value in parse_specifications(text):
+        db.session.add(Specification(product_id=product_id, name=name, value=value))
 
 def parse_specifications(text):
     """Turn a cell into (name, value) pairs, ignoring anything unreadable"""
@@ -965,12 +977,9 @@ def import_excel():
 
                 # A filled cell replaces what the product had; an empty one leaves it alone
                 if specs_col:
-                    pairs = parse_specifications(ws.cell(row=row, column=specs_col).value)
-                    if pairs:
-                        Specification.query.filter_by(product_id=product.id).delete()
-                        for spec_name, spec_value in pairs:
-                            db.session.add(Specification(
-                                product_id=product.id, name=spec_name, value=spec_value))
+                    cell_text = ws.cell(row=row, column=specs_col).value
+                    if parse_specifications(cell_text):
+                        replace_specifications(product.id, cell_text)
 
                 if not product.image:
                     try:
