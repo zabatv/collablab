@@ -1,6 +1,45 @@
 // API Helper Functions
 const API_BASE = 'http://45.143.93.41:5000/api';
 
+// XHR rather than fetch: only XHR reports how much of the file has gone out
+function uploadWithProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.setRequestHeader('X-Admin-Key', localStorage.getItem('admin_key'));
+
+    xhr.upload.onprogress = (event) => {
+      if (onProgress && event.lengthComputable) {
+        onProgress(Math.round((event.loaded / event.total) * 100));
+      }
+    };
+
+    xhr.onload = () => {
+      let result = {};
+      try {
+        result = JSON.parse(xhr.responseText);
+      } catch (error) {
+        // keep result empty, the status code below carries the message
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(result);
+      } else if (xhr.status === 404) {
+        reject(new Error('Сервер не знает этот запрос — на нём старая версия backend'));
+      } else if (xhr.status === 413) {
+        reject(new Error('Файл слишком большой для сервера'));
+      } else {
+        reject(new Error(result.error || `Сервер ответил ошибкой ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Нет связи с сервером'));
+    xhr.ontimeout = () => reject(new Error('Сервер не ответил вовремя'));
+
+    xhr.send(formData);
+  });
+}
+
 async function apiCall(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
   const headers = {
@@ -87,35 +126,21 @@ const AdminAPI = {
     });
   },
 
-  uploadImage: (productId, file) => {
+  uploadImage: (productId, file, onProgress) => {
     const formData = new FormData();
     formData.append('image', file);
 
-    return fetch(`${API_BASE}/admin/products/${productId}/upload-image`, {
-      method: 'POST',
-      headers: { 'X-Admin-Key': localStorage.getItem('admin_key') },
-      body: formData
-    }).then(async res => {
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error);
-      return result;
-    });
+    return uploadWithProgress(
+      `${API_BASE}/admin/products/${productId}/upload-image`, formData, onProgress);
   },
 
-  uploadVideoFile: (productId, file, title = '') => {
+  uploadVideoFile: (productId, file, title = '', onProgress) => {
     const formData = new FormData();
     formData.append('video', file);
     formData.append('title', title);
 
-    return fetch(`${API_BASE}/admin/products/${productId}/upload-video-file`, {
-      method: 'POST',
-      headers: { 'X-Admin-Key': localStorage.getItem('admin_key') },
-      body: formData
-    }).then(async res => {
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error);
-      return result;
-    });
+    return uploadWithProgress(
+      `${API_BASE}/admin/products/${productId}/upload-video-file`, formData, onProgress);
   },
 
   addVideo: (productId, data) => {

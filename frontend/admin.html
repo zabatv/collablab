@@ -154,6 +154,30 @@
       color: var(--color-gray-dark);
     }
 
+    .upload-progress-row {
+      margin-bottom: 12px;
+    }
+
+    .upload-progress-label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .upload-progress-track {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--color-border);
+      overflow: hidden;
+    }
+
+    .upload-progress-bar {
+      height: 100%;
+      width: 0;
+      background: var(--color-accent);
+      transition: width 0.2s;
+    }
+
     .upload-url-row {
       display: flex;
       gap: 8px;
@@ -473,6 +497,8 @@
 
         <button type="submit" class="btn btn-primary" style="width: 100%;">СОХРАНИТЬ</button>
       </form>
+
+      <div id="upload-progress" style="margin-top: 24px; display: none;"></div>
 
       <div id="product-images" style="margin-top: 24px;">
         <h4>ФОТО ТОВАРА</h4>
@@ -813,7 +839,12 @@
 
       try {
         for (const file of chosen) {
-          await AdminAPI.uploadImage(currentProductId, file);
+          const track = startUploadProgress(file.name);
+          try {
+            await AdminAPI.uploadImage(currentProductId, file, track.update);
+          } finally {
+            track.done();
+          }
         }
         showNotification(chosen.length > 1 ? 'Фото загружены' : 'Фото загружено');
         editProduct(currentProductId);
@@ -856,6 +887,41 @@
       return result;
     }
 
+    // Uploads can take minutes, so the dialog shows a live bar instead of sitting still
+    function startUploadProgress(filename) {
+      const panel = el('#upload-progress');
+      const row = document.createElement('div');
+      row.className = 'upload-progress-row';
+
+      const label = document.createElement('div');
+      label.className = 'upload-progress-label';
+      label.textContent = `Загрузка "${filename}" — 0%`;
+      row.appendChild(label);
+
+      const track = document.createElement('div');
+      track.className = 'upload-progress-track';
+      const bar = document.createElement('div');
+      bar.className = 'upload-progress-bar';
+      track.appendChild(bar);
+      row.appendChild(track);
+
+      panel.appendChild(row);
+      show(panel);
+
+      return {
+        update: (percent) => {
+          bar.style.width = percent + '%';
+          label.textContent = percent >= 100
+            ? `Обработка "${filename}" на сервере...`
+            : `Загрузка "${filename}" — ${percent}%`;
+        },
+        done: () => {
+          row.remove();
+          if (panel.children.length === 0) hide(panel);
+        }
+      };
+    }
+
     const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
 
     function rejectOversized(files) {
@@ -881,7 +947,12 @@
 
       try {
         for (const file of chosen) {
-          await AdminAPI.uploadVideoFile(currentProductId, file, title);
+          const track = startUploadProgress(file.name);
+          try {
+            await AdminAPI.uploadVideoFile(currentProductId, file, title, track.update);
+          } finally {
+            track.done();
+          }
         }
         showNotification(chosen.length > 1 ? 'Видео загружены' : 'Видео загружено');
         editProduct(currentProductId);
@@ -918,7 +989,12 @@
     async function flushPendingMedia(productId) {
       for (const item of pendingMedia.images) {
         if (item.file) {
-          await AdminAPI.uploadImage(productId, item.file);
+          const track = startUploadProgress(item.file.name);
+          try {
+            await AdminAPI.uploadImage(productId, item.file, track.update);
+          } finally {
+            track.done();
+          }
         } else {
           await downloadImageByUrl(productId, item.url);
         }
@@ -926,7 +1002,12 @@
 
       for (const item of pendingMedia.videos) {
         if (item.file) {
-          await AdminAPI.uploadVideoFile(productId, item.file, item.title);
+          const track = startUploadProgress(item.file.name);
+          try {
+            await AdminAPI.uploadVideoFile(productId, item.file, item.title, track.update);
+          } finally {
+            track.done();
+          }
         } else {
           await AdminAPI.addVideo(productId, { url: item.url, title: item.title });
         }
