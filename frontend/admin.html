@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ панель - ROBOT</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .admin-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      min-height: 100vh;
+      gap: 0;
+    }
+
+    .admin-sidebar {
+      background: #f5f5f5;
+      border-right: 1px solid var(--color-border);
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .admin-sidebar .nav-item {
+      padding: 12px 24px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: var(--transition);
+      border-left-color: transparent;
+    }
+
+    .admin-sidebar .nav-item:hover {
+      background: #e8e8e8;
+    }
+
+    .admin-sidebar .nav-item.active {
+      background: var(--color-secondary);
+      border-left-color: var(--color-accent);
+      font-weight: 600;
+      color: var(--color-accent);
+    }
+
+    .admin-content {
+      padding: 32px;
+    }
+
+    .admin-section {
+      display: none;
+    }
+
+    .admin-section.active {
+      display: block;
+    }
+
+    .admin-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .admin-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+    }
+
+    .admin-table thead {
+      background: #f5f5f5;
+    }
+
+    .admin-table th,
+    .admin-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .admin-table th {
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--color-gray-dark);
+    }
+
+    .admin-table tbody tr:hover {
+      background: #f9f9f9;
+    }
+
+    .admin-form {
+      background: #f9f9f9;
+      padding: 24px;
+      border-radius: 4px;
+      max-width: 600px;
+    }
+
+    .admin-form .form-group {
+      margin-bottom: 16px;
+    }
+
+    .admin-form label {
+      font-weight: 600;
+      margin-bottom: 8px;
+      display: block;
+      font-size: 14px;
+    }
+
+    .admin-form input,
+    .admin-form textarea,
+    .admin-form select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .admin-form input:focus,
+    .admin-form textarea:focus,
+    .admin-form select:focus {
+      border-color: var(--color-accent);
+      box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.1);
+    }
+
+    .admin-form textarea {
+      resize: vertical;
+      min-height: 120px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 4px;
+      padding: 32px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-close {
+      float: right;
+      cursor: pointer;
+      font-size: 24px;
+      color: var(--color-gray-dark);
+    }
+
+    .modal-close:hover {
+      color: var(--color-primary);
+    }
+
+    .table-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .table-actions button {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .logout-btn {
+      position: absolute;
+      bottom: 24px;
+      left: 24px;
+      right: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-layout">
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div style="padding: 16px 24px; margin-bottom: 24px; border-bottom: 1px solid var(--color-border);">
+        <div style="font-weight: 800; font-size: 18px;">ROBOT ADMIN</div>
+        <div class="text-muted" style="margin-top: 4px;">Управление каталогом</div>
+      </div>
+
+      <nav style="position: relative; height: calc(100vh - 200px);">
+        <div class="nav-item active" onclick="switchTab('products')">Товары</div>
+        <div class="nav-item" onclick="switchTab('categories')">Категории</div>
+        <div class="nav-item" onclick="switchTab('brands')">Бренды</div>
+
+        <button class="btn btn-ghost logout-btn" onclick="logout()" style="width: 100%;">ВЫХОД</button>
+      </nav>
+    </aside>
+
+    <!-- Content -->
+    <main class="admin-content">
+
+      <!-- Products Section -->
+      <section class="admin-section active" id="products-section">
+        <div class="admin-header">
+          <h1>ТОВАРЫ</h1>
+          <button class="btn btn-primary" onclick="openAddProductModal()">ДОБАВИТЬ ТОВАР</button>
+        </div>
+
+        <div class="admin-table" style="overflow-x: auto;">
+          <table style="width: 100%;">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Название</th>
+                <th>Категория</th>
+                <th>Цена</th>
+                <th>Остаток</th>
+                <th>Действия</th>
+              </tr>
+            </thead>
+            <tbody id="products-table-body">
+              <tr>
+                <td colspan="6" class="loading">Загрузка...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination" id="products-pagination"></div>
+      </section>
+
+      <!-- Categories Section -->
+      <section class="admin-section" id="categories-section">
+        <div class="admin-header">
+          <h1>КАТЕГОРИИ</h1>
+          <button class="btn btn-primary" onclick="openAddCategoryModal()">ДОБАВИТЬ КАТЕГОРИЮ</button>
+        </div>
+
+        <div id="categories-list"></div>
+      </section>
+
+      <!-- Brands Section -->
+      <section class="admin-section" id="brands-section">
+        <div class="admin-header">
+          <h1>БРЕНДЫ</h1>
+          <button class="btn btn-primary" onclick="openAddBrandModal()">ДОБАВИТЬ БРЕНД</button>
+        </div>
+
+        <div id="brands-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Add/Edit Product Modal -->
+  <div class="modal" id="product-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeProductModal()">&times;</span>
+      <h2 id="product-modal-title">ДОБАВИТЬ ТОВАР</h2>
+
+      <form id="product-form" class="admin-form" style="margin-top: 24px;">
+        <div class="form-group">
+          <label>SKU (код товара) *</label>
+          <input type="text" id="product-sku" required>
+        </div>
+
+        <div class="form-group">
+          <label>Название *</label>
+          <input type="text" id="product-name" required>
+        </div>
+
+        <div class="form-group">
+          <label>Описание</label>
+          <textarea id="product-description"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Категория *</label>
+          <select id="product-category" required></select>
+        </div>
+
+        <div class="form-group">
+          <label>Бренд</label>
+          <select id="product-brand"></select>
+        </div>
+
+        <div class="form-group">
+          <label>Цена *</label>
+          <input type="number" id="product-price" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+          <label>Старая цена (для скидок)</label>
+          <input type="number" id="product-old-price" step="0.01">
+        </div>
+
+        <div class="form-group">
+          <label>Остаток на складе *</label>
+          <input type="number" id="product-stock" value="0" required>
+        </div>
+
+        <div class="form-group">
+          <label>Активен</label>
+          <input type="checkbox" id="product-active" checked style="width: auto;">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">СОХРАНИТЬ</button>
+      </form>
+
+      <div id="product-images" style="margin-top: 24px; display: none;">
+        <h4>ЗАГРУЗИТЬ ФОТО</h4>
+        <input type="file" id="product-image-input" accept="image/*" onchange="handleImageUpload()">
+        <div id="product-images-list" style="margin-top: 12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add Category Modal -->
+  <div class="modal" id="category-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeCategoryModal()">&times;</span>
+      <h2>ДОБАВИТЬ КАТЕГОРИЮ</h2>
+
+      <form id="category-form" class="admin-form" style="margin-top: 24px;">
+        <div class="form-group">
+          <label>Название *</label>
+          <input type="text" id="category-name" required>
+        </div>
+
+        <div class="form-group">
+          <label>Описание</label>
+          <textarea id="category-description"></textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">ДОБАВИТЬ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Brand Modal -->
+  <div class="modal" id="brand-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeBrandModal()">&times;</span>
+      <h2>ДОБАВИТЬ БРЕНД</h2>
+
+      <form id="brand-form" class="admin-form" style="margin-top: 24px;">
+        <div class="form-group">
+          <label>Название *</label>
+          <input type="text" id="brand-name" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">ДОБАВИТЬ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    let currentProductId = null;
+    let currentProductsPage = 1;
+
+    // Check authentication
+    window.addEventListener('load', () => {
+      const adminKey = localStorage.getItem('admin_key');
+      if (!adminKey) {
+        const key = prompt('Введите ключ администратора:');
+        if (key) {
+          localStorage.setItem('admin_key', key);
+          location.reload();
+        } else {
+          window.location.href = 'index.html';
+        }
+      }
+
+      loadProducts();
+      loadCategoriesForSelect();
+      loadBrandsForSelect();
+    });
+
+    // Tab switching
+    function switchTab(tab) {
+      // Hide all sections
+      document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+      // Show selected
+      document.getElementById(tab + '-section').classList.add('active');
+      event.target.classList.add('active');
+
+      // Load data
+      if (tab === 'categories') loadCategories();
+      if (tab === 'brands') loadBrands();
+    }
+
+    // Products
+    async function loadProducts(page = 1) {
+      try {
+        const data = await AdminAPI.getProducts(page);
+        const tbody = el('#products-table-body');
+        clear(tbody);
+
+        data.products.forEach(product => {
+          tbody.innerHTML += `
+            <tr>
+              <td>${product.sku}</td>
+              <td>${product.name}</td>
+              <td>${product.category?.name || '-'}</td>
+              <td>${formatPrice(product.price)}</td>
+              <td>${product.stock}</td>
+              <td>
+                <div class="table-actions">
+                  <button class="btn btn-ghost" onclick="editProduct(${product.id})">Редак.</button>
+                  <button class="btn btn-ghost" onclick="deleteProduct(${product.id})">Удалить</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        });
+
+        // Pagination
+        const paginationDiv = el('#products-pagination');
+        clear(paginationDiv);
+        for (let i = 1; i <= data.pages; i++) {
+          const btn = document.createElement('button');
+          btn.textContent = i;
+          btn.classList.toggle('active', i === page);
+          btn.onclick = () => loadProducts(i);
+          paginationDiv.appendChild(btn);
+        }
+      } catch (error) {
+        console.error('Error loading products:', error);
+      }
+    }
+
+    async function loadCategoriesForSelect() {
+      try {
+        const categories = await AdminAPI.getCategories();
+        const select = el('#product-category');
+        select.innerHTML = '<option value="">Выберите категорию</option>';
+        categories.forEach(cat => {
+          select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+        });
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    }
+
+    async function loadBrandsForSelect() {
+      try {
+        const brands = await AdminAPI.getBrands();
+        const select = el('#product-brand');
+        select.innerHTML = '<option value="">Выберите бренд</option>';
+        brands.forEach(brand => {
+          select.innerHTML += `<option value="${brand.id}">${brand.name}</option>`;
+        });
+      } catch (error) {
+        console.error('Error loading brands:', error);
+      }
+    }
+
+    function openAddProductModal() {
+      currentProductId = null;
+      el('#product-modal-title').textContent = 'ДОБАВИТЬ ТОВАР';
+      el('#product-form').reset();
+      hide(el('#product-images'));
+      el('#product-modal').classList.add('active');
+    }
+
+    async function editProduct(id) {
+      try {
+        const product = await ProductAPI.getProduct(id);
+        currentProductId = id;
+
+        el('#product-modal-title').textContent = 'РЕДАКТИРОВАТЬ ТОВАР';
+        el('#product-sku').value = product.sku;
+        el('#product-name').value = product.name;
+        el('#product-description').value = product.description || '';
+        el('#product-category').value = product.category?.id || '';
+        el('#product-brand').value = product.brand?.id || '';
+        el('#product-price').value = product.price;
+        el('#product-old-price').value = product.old_price || '';
+        el('#product-stock').value = product.stock;
+        el('#product-active').checked = true;
+
+        show(el('#product-images'));
+        el('#product-images-list').innerHTML = product.images.length > 0
+          ? product.images.map((img, i) => `<div style="margin: 8px 0;"><img src="${img.url}" style="max-width: 100px; max-height: 100px;"> <small>${img.alt}</small></div>`).join('')
+          : '<p class="text-muted">Нет фото</p>';
+
+        el('#product-modal').classList.add('active');
+      } catch (error) {
+        console.error('Error loading product:', error);
+      }
+    }
+
+    function closeProductModal() {
+      el('#product-modal').classList.remove('active');
+      currentProductId = null;
+    }
+
+    el('#product-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        sku: el('#product-sku').value,
+        name: el('#product-name').value,
+        description: el('#product-description').value,
+        category_id: parseInt(el('#product-category').value),
+        brand_id: el('#product-brand').value ? parseInt(el('#product-brand').value) : null,
+        price: parseFloat(el('#product-price').value),
+        old_price: el('#product-old-price').value ? parseFloat(el('#product-old-price').value) : null,
+        stock: parseInt(el('#product-stock').value),
+        is_active: el('#product-active').checked
+      };
+
+      try {
+        if (currentProductId) {
+          await AdminAPI.updateProduct(currentProductId, data);
+          showNotification('Товар обновлён');
+        } else {
+          const product = await AdminAPI.createProduct(data);
+          currentProductId = product.id;
+          showNotification('Товар добавлен');
+          show(el('#product-images'));
+        }
+
+        loadProducts();
+      } catch (error) {
+        showNotification('Ошибка: ' + error.message, 'error');
+      }
+    });
+
+    async function deleteProduct(id) {
+      if (confirm('Вы уверены?')) {
+        try {
+          await AdminAPI.deleteProduct(id);
+          showNotification('Товар удален');
+          loadProducts();
+        } catch (error) {
+          showNotification('Ошибка удаления', 'error');
+        }
+      }
+    }
+
+    async function handleImageUpload() {
+      const file = el('#product-image-input').files[0];
+      if (!file || !currentProductId) return;
+
+      try {
+        const result = await AdminAPI.uploadImage(currentProductId, file);
+        showNotification('Фото загружено');
+        el('#product-image-input').value = '';
+        editProduct(currentProductId);
+      } catch (error) {
+        showNotification('Ошибка загрузки', 'error');
+      }
+    }
+
+    // Categories
+    async function loadCategories() {
+      try {
+        const categories = await AdminAPI.getCategories();
+        const list = el('#categories-list');
+        clear(list);
+
+        categories.forEach(cat => {
+          list.innerHTML += `
+            <div style="padding: 16px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 12px;">
+              <h4>${cat.name}</h4>
+              <p class="text-muted">${cat.product_count} товаров</p>
+            </div>
+          `;
+        });
+      } catch (error) {
+        console.error('Error loading categories:', error);
+      }
+    }
+
+    function openAddCategoryModal() {
+      el('#category-form').reset();
+      el('#category-modal').classList.add('active');
+    }
+
+    function closeCategoryModal() {
+      el('#category-modal').classList.remove('active');
+    }
+
+    el('#category-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        name: el('#category-name').value,
+        description: el('#category-description').value
+      };
+
+      try {
+        await AdminAPI.createCategory(data);
+        showNotification('Категория добавлена');
+        loadCategories();
+        loadCategoriesForSelect();
+        closeCategoryModal();
+      } catch (error) {
+        showNotification('Ошибка: ' + error.message, 'error');
+      }
+    });
+
+    // Brands
+    async function loadBrands() {
+      try {
+        const brands = await AdminAPI.getBrands();
+        const list = el('#brands-list');
+        clear(list);
+
+        brands.forEach(brand => {
+          list.innerHTML += `
+            <div style="padding: 16px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 12px;">
+              <h4>${brand.name}</h4>
+            </div>
+          `;
+        });
+      } catch (error) {
+        console.error('Error loading brands:', error);
+      }
+    }
+
+    function openAddBrandModal() {
+      el('#brand-form').reset();
+      el('#brand-modal').classList.add('active');
+    }
+
+    function closeBrandModal() {
+      el('#brand-modal').classList.remove('active');
+    }
+
+    el('#brand-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const data = {
+        name: el('#brand-name').value
+      };
+
+      try {
+        await AdminAPI.createBrand(data);
+        showNotification('Бренд добавлен');
+        loadBrands();
+        loadBrandsForSelect();
+        closeBrandModal();
+      } catch (error) {
+        showNotification('Ошибка: ' + error.message, 'error');
+      }
+    });
+
+    function logout() {
+      localStorage.removeItem('admin_key');
+      window.location.href = 'index.html';
+    }
+  </script>
+</body>
+</html>

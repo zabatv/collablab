@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Товар - ROBOT</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-top">
+      <div class="container flex-between">
+        <span>Доставка по России • Гарантия качества</span>
+        <span>8 (800) 123-45-67</span>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="flex-between" style="gap: 24px; flex-wrap: wrap;">
+        <div class="logo">
+          <span onclick="window.location.href='index.html'" style="cursor: pointer;">ROBOT</span>
+        </div>
+
+        <div class="search-bar">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Поиск товаров..."
+            onkeyup="handleSearch()">
+        </div>
+
+        <div class="header-nav">
+          <div onclick="window.location.href='catalog.html'">КАТАЛОГ</div>
+          <div onclick="window.location.href='#'">О КОМПАНИИ</div>
+          <div onclick="window.location.href='#'">КОНТАКТЫ</div>
+          <div onclick="window.location.href='admin.html'">АДМИН</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Breadcrumb -->
+  <div class="container" style="padding: 16px 0;">
+    <div class="text-muted">
+      <a href="index.html">Главная</a> /
+      <a href="catalog.html">Каталог</a> /
+      <span id="breadcrumb-product">Товар</span>
+    </div>
+  </div>
+
+  <!-- Product Details -->
+  <main class="container" id="product-container" style="padding: 32px 0;">
+    <div class="loading">Загрузка...</div>
+  </main>
+
+  <!-- Related Products -->
+  <section class="container" style="padding: 48px 0; border-top: 1px solid var(--color-border);">
+    <h2 style="margin-bottom: 32px;">ПОХОЖИЕ ТОВАРЫ</h2>
+    <div id="related-products" class="grid grid-4"></div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section">
+          <h4>КОМПАНИЯ</h4>
+          <ul>
+            <li><a href="#">О нас</a></li>
+            <li><a href="#">Контакты</a></li>
+            <li><a href="#">Блог</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>ПОКУПАТЕЛЮ</h4>
+          <ul>
+            <li><a href="#">Каталог</a></li>
+            <li><a href="#">Доставка</a></li>
+            <li><a href="#">Возврат</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>КОНТАКТЫ</h4>
+          <ul>
+            <li>Телефон: 8 (800) 123-45-67</li>
+            <li>Email: info@robot.ru</li>
+            <li>Адрес: г. Москва</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    let currentProduct = null;
+    let selectedImageIndex = 0;
+
+    async function loadProduct() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const productId = params.get('id');
+
+        if (!productId) {
+          window.location.href = 'catalog.html';
+          return;
+        }
+
+        currentProduct = await ProductAPI.getProduct(productId);
+        renderProduct();
+        loadRelatedProducts();
+      } catch (error) {
+        console.error('Error loading product:', error);
+        el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p><a href="catalog.html">Вернуться в каталог</a></p></div>';
+      }
+    }
+
+    function renderProduct() {
+      const product = currentProduct;
+      const discount = product.discount;
+      const stockClass = product.in_stock ? 'in-stock' : 'out-of-stock';
+      const stockText = product.in_stock ? `В наличии: ${product.stock}` : 'Нет в наличии';
+
+      // Update breadcrumb
+      el('#breadcrumb-product').textContent = product.name;
+
+      // Get all images
+      const allImages = [
+        { url: product.image, alt: product.name },
+        ...product.images
+      ];
+
+      // Build HTML
+      let html = `
+        <div class="product-details">
+          <!-- Gallery -->
+          <div class="product-gallery">
+            <div class="product-main-image">
+              <img id="main-image" src="${allImages[0]?.url || product.image}" alt="${product.name}" onerror="this.src='/placeholder.png'">
+            </div>
+            <div class="product-thumbnails" id="thumbnails"></div>
+          </div>
+
+          <!-- Info -->
+          <div class="product-info">
+            <h1>${product.name}</h1>
+
+            <div class="product-meta">
+              <div class="product-meta-item">
+                <div class="product-meta-label">SKU</div>
+                <div class="product-meta-value">${product.sku}</div>
+              </div>
+              <div class="product-meta-item">
+                <div class="product-meta-label">Бренд</div>
+                <div class="product-meta-value">${product.brand?.name || 'N/A'}</div>
+              </div>
+              <div class="product-meta-item">
+                <div class="product-meta-label">Категория</div>
+                <div class="product-meta-value">${product.category?.name || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div class="product-price">
+              ${formatPrice(product.price)}
+              ${product.old_price ? `<span class="product-price-old">${formatPrice(product.old_price)}</span>` : ''}
+            </div>
+
+            <div class="product-stock ${stockClass}">${stockText}</div>
+
+            <div class="product-actions">
+              <button class="btn btn-primary btn-lg" onclick="callStore()" ${!product.in_stock ? 'disabled' : ''}>
+                СВЯЗАТЬСЯ С МАГАЗИНОМ
+              </button>
+            </div>
+
+            ${product.description ? `
+              <div style="margin-bottom: 24px; padding: 16px; background: var(--color-gray); border-radius: 4px;">
+                <h4 style="margin-top: 0;">Описание</h4>
+                <p>${product.description}</p>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      // Add specifications if available
+      if (product.specifications && product.specifications.length > 0) {
+        html += `
+          <div class="specifications">
+            <h3>ХАРАКТЕРИСТИКИ</h3>
+            <table class="spec-table">
+              ${product.specifications.map(spec => `
+                <tr>
+                  <td>${spec.name}</td>
+                  <td>${spec.value}</td>
+                </tr>
+              `).join('')}
+            </table>
+          </div>
+        `;
+      }
+
+      el('#product-container').innerHTML = html;
+
+      // Render thumbnails
+      const thumbnailsDiv = el('#thumbnails');
+      clear(thumbnailsDiv);
+      allImages.forEach((img, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'product-thumbnail' + (index === 0 ? ' active' : '');
+        thumb.innerHTML = `<img src="${img.url}" alt="${img.alt || 'Фото ' + (index + 1)}" onerror="this.src='/placeholder.png'">`;
+        thumb.onclick = () => selectImage(index);
+        thumbnailsDiv.appendChild(thumb);
+      });
+    }
+
+    function selectImage(index) {
+      const mainImage = el('#main-image');
+      const product = currentProduct;
+      const allImages = [
+        { url: product.image, alt: product.name },
+        ...product.images
+      ];
+
+      mainImage.src = allImages[index].url;
+      selectedImageIndex = index;
+
+      // Update thumbnails
+      elAll('.product-thumbnail').forEach((thumb, i) => {
+        thumb.classList.toggle('active', i === index);
+      });
+    }
+
+    async function loadRelatedProducts() {
+      try {
+        const product = currentProduct;
+        if (!product.category?.id) return;
+
+        const data = await ProductAPI.getProducts({
+          category_id: product.category.id,
+          per_page: 4
+        });
+
+        const grid = el('#related-products');
+        clear(grid);
+
+        data.products
+          .filter(p => p.id !== product.id)
+          .slice(0, 4)
+          .forEach(p => {
+            grid.innerHTML += createProductCard(p);
+          });
+      } catch (error) {
+        console.error('Error loading related products:', error);
+      }
+    }
+
+    function callStore() {
+      showNotification('Запрос отправлен. Наш менеджер свяжется с вами в ближайшее время!', 'success');
+    }
+
+    async function handleSearch() {
+      const query = el('#search-input').value.trim();
+      if (query.length >= 2) {
+        window.location.href = `catalog.html?search=${encodeURIComponent(query)}`;
+      }
+    }
+
+    // Initialize
+    loadProduct();
+  </script>
+</body>
+</html>

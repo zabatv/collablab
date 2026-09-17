@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROBOT - Магазин электроники</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-top">
+      <div class="container flex-between">
+        <span>Доставка по России • Гарантия качества</span>
+        <span>8 (800) 123-45-67</span>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="flex-between" style="gap: 24px; flex-wrap: wrap;">
+        <div class="logo">
+          <span>ROBOT</span>
+        </div>
+
+        <div class="search-bar">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Поиск товаров..."
+            onkeyup="handleSearch()">
+        </div>
+
+        <div class="header-nav">
+          <div onclick="window.location.href='catalog.html'">КАТАЛОГ</div>
+          <div onclick="window.location.href='#'">О КОМПАНИИ</div>
+          <div onclick="window.location.href='#'">КОНТАКТЫ</div>
+          <div onclick="window.location.href='admin.html'">АДМИН</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <h1>ТЕХНОЛОГИЯ БУДУЩЕГО</h1>
+        <p>Качественная электроника и гаджеты для вашей жизни. Более 1000 товаров от ведущих производителей.</p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" onclick="window.location.href='catalog.html'">СМОТРЕТЬ КАТАЛОГ</button>
+          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('featured').scrollIntoView({behavior: 'smooth'})">ПОПУЛЯРНЫЕ</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search Results (hidden by default) -->
+  <div id="search-results" style="display: none; padding: 48px 0;">
+    <div class="container">
+      <h2>Результаты поиска</h2>
+      <div id="search-results-grid" class="grid grid-4" style="margin-top: 24px;"></div>
+    </div>
+  </div>
+
+  <!-- Featured Products -->
+  <section id="featured" class="container" style="padding: 48px 0;">
+    <h2 style="margin-bottom: 32px;">ПОПУЛЯРНЫЕ ТОВАРЫ</h2>
+    <div id="featured-products" class="grid grid-4"></div>
+  </section>
+
+  <!-- Categories Preview -->
+  <section class="container" style="padding: 48px 0;">
+    <h2 style="margin-bottom: 32px;">КАТЕГОРИИ</h2>
+    <div id="categories-grid" class="grid grid-3"></div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section">
+          <h4>КОМПАНИЯ</h4>
+          <ul>
+            <li><a href="#">О нас</a></li>
+            <li><a href="#">Контакты</a></li>
+            <li><a href="#">Блог</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>ПОКУПАТЕЛЮ</h4>
+          <ul>
+            <li><a href="#">Каталог</a></li>
+            <li><a href="#">Доставка</a></li>
+            <li><a href="#">Возврат</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>КОНТАКТЫ</h4>
+          <ul>
+            <li>Телефон: 8 (800) 123-45-67</li>
+            <li>Email: info@robot.ru</li>
+            <li>Адрес: г. Москва</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    // Load Featured Products and Categories
+    async function loadContent() {
+      try {
+        // Load products
+        const productsData = await ProductAPI.getProducts({ per_page: 8 });
+        const productsGrid = el('#featured-products');
+        clear(productsGrid);
+
+        if (productsData.products.length > 0) {
+          productsData.products.forEach(product => {
+            productsGrid.innerHTML += createProductCard(product);
+          });
+        } else {
+          productsGrid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
+        }
+
+        // Load categories
+        const categories = await ProductAPI.getCategories();
+        const categoriesGrid = el('#categories-grid');
+        clear(categoriesGrid);
+
+        categories.forEach(category => {
+          categoriesGrid.innerHTML += `
+            <div class="card" style="cursor: pointer; text-align: center; padding: 48px 24px;" onclick="window.location.href='catalog.html?category=${category.id}'">
+              <h3>${category.name}</h3>
+              <p class="text-muted">${category.product_count} товаров</p>
+            </div>
+          `;
+        });
+      } catch (error) {
+        console.error('Error loading content:', error);
+      }
+    }
+
+    // Handle search
+    async function handleSearch() {
+      const query = el('#search-input').value.trim();
+
+      if (query.length < 2) {
+        hide(el('#search-results'));
+        return;
+      }
+
+      try {
+        const results = await ProductAPI.search(query);
+        const resultsGrid = el('#search-results-grid');
+        clear(resultsGrid);
+
+        show(el('#search-results'));
+
+        if (results.length > 0) {
+          results.forEach(product => {
+            resultsGrid.innerHTML += createProductCard(product);
+          });
+        } else {
+          resultsGrid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
+        }
+      } catch (error) {
+        console.error('Search error:', error);
+      }
+    }
+
+    // Load on page load
+    loadContent();
+  </script>
+</body>
+</html>

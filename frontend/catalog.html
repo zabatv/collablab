@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Каталог - ROBOT</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="header-top">
+      <div class="container flex-between">
+        <span>Доставка по России • Гарантия качества</span>
+        <span>8 (800) 123-45-67</span>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="flex-between" style="gap: 24px; flex-wrap: wrap;">
+        <div class="logo">
+          <span onclick="window.location.href='index.html'" style="cursor: pointer;">ROBOT</span>
+        </div>
+
+        <div class="search-bar">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Поиск товаров..."
+            onkeyup="handleSearch()">
+        </div>
+
+        <div class="header-nav">
+          <div onclick="window.location.href='catalog.html'" style="border-bottom-color: var(--color-accent);">КАТАЛОГ</div>
+          <div onclick="window.location.href='#'">О КОМПАНИИ</div>
+          <div onclick="window.location.href='#'">КОНТАКТЫ</div>
+          <div onclick="window.location.href='admin.html'">АДМИН</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container" style="padding: 32px 0;">
+    <h1 style="margin-bottom: 32px;">КАТАЛОГ ТОВАРОВ</h1>
+
+    <div style="display: grid; grid-template-columns: 250px 1fr; gap: 32px;">
+
+      <!-- Filters -->
+      <aside>
+        <div class="filters">
+
+          <!-- Sort -->
+          <div class="filter-group">
+            <h4>СОРТИРОВКА</h4>
+            <select id="sort-select" onchange="applyFilters()" style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+              <option value="newest">Новые</option>
+              <option value="name">По названию</option>
+              <option value="price_asc">Цена: низкая</option>
+              <option value="price_desc">Цена: высокая</option>
+            </select>
+          </div>
+
+          <!-- Categories -->
+          <div class="filter-group">
+            <h4>КАТЕГОРИИ</h4>
+            <div class="filter-options" id="categories-filter"></div>
+          </div>
+
+          <!-- Brands -->
+          <div class="filter-group">
+            <h4>БРЕНДЫ</h4>
+            <div class="filter-options" id="brands-filter"></div>
+          </div>
+
+          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%; margin-top: 24px;">ОЧИСТИТЬ ФИЛЬТРЫ</button>
+        </div>
+      </aside>
+
+      <!-- Products -->
+      <section>
+        <!-- Results Info -->
+        <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--color-border);">
+          <p class="text-muted">
+            Найдено: <strong id="results-count">0</strong> товаров
+          </p>
+        </div>
+
+        <!-- Products Grid -->
+        <div id="products-grid" class="grid grid-3"></div>
+
+        <!-- Pagination -->
+        <div class="pagination" id="pagination" style="margin-top: 48px;"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section">
+          <h4>КОМПАНИЯ</h4>
+          <ul>
+            <li><a href="#">О нас</a></li>
+            <li><a href="#">Контакты</a></li>
+            <li><a href="#">Блог</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>ПОКУПАТЕЛЮ</h4>
+          <ul>
+            <li><a href="#">Каталог</a></li>
+            <li><a href="#">Доставка</a></li>
+            <li><a href="#">Возврат</a></li>
+          </ul>
+        </div>
+        <div class="footer-section">
+          <h4>КОНТАКТЫ</h4>
+          <ul>
+            <li>Телефон: 8 (800) 123-45-67</li>
+            <li>Email: info@robot.ru</li>
+            <li>Адрес: г. Москва</li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/api.js"></script>
+  <script src="js/main.js"></script>
+  <script>
+    let currentPage = 1;
+    let currentFilters = {};
+
+    async function loadFilters() {
+      try {
+        // Load categories
+        const categories = await ProductAPI.getCategories();
+        const categoriesFilter = el('#categories-filter');
+        clear(categoriesFilter);
+
+        categories.forEach(category => {
+          categoriesFilter.innerHTML += `
+            <div class="filter-option">
+              <input type="checkbox" id="cat-${category.id}" value="${category.id}" onchange="applyFilters()">
+              <label for="cat-${category.id}">${category.name} (${category.product_count})</label>
+            </div>
+          `;
+        });
+
+        // Load brands
+        const brands = await ProductAPI.getBrands();
+        const brandsFilter = el('#brands-filter');
+        clear(brandsFilter);
+
+        brands.forEach(brand => {
+          brandsFilter.innerHTML += `
+            <div class="filter-option">
+              <input type="checkbox" id="brand-${brand.id}" value="${brand.id}" onchange="applyFilters()">
+              <label for="brand-${brand.id}">${brand.name}</label>
+            </div>
+          `;
+        });
+
+        // Check URL params
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('category')) {
+          const cat = el(`#cat-${params.get('category')}`);
+          if (cat) cat.checked = true;
+        }
+      } catch (error) {
+        console.error('Error loading filters:', error);
+      }
+    }
+
+    async function applyFilters() {
+      currentPage = 1;
+
+      const selectedCategories = elAll('#categories-filter input:checked');
+      const selectedBrands = elAll('#brands-filter input:checked');
+      const sort = el('#sort-select').value;
+
+      currentFilters = {
+        sort: sort,
+        page: currentPage,
+        per_page: 12
+      };
+
+      if (selectedCategories.length === 1) {
+        currentFilters.category_id = selectedCategories[0].value;
+      }
+      if (selectedBrands.length === 1) {
+        currentFilters.brand_id = selectedBrands[0].value;
+      }
+
+      loadProducts();
+    }
+
+    async function loadProducts() {
+      try {
+        const data = await ProductAPI.getProducts(currentFilters);
+        const grid = el('#products-grid');
+        clear(grid);
+
+        el('#results-count').textContent = data.total;
+
+        if (data.products.length > 0) {
+          data.products.forEach(product => {
+            grid.innerHTML += createProductCard(product);
+          });
+        } else {
+          grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
+        }
+
+        // Render pagination
+        renderPagination(data.pages, data.current_page);
+      } catch (error) {
+        console.error('Error loading products:', error);
+      }
+    }
+
+    function renderPagination(totalPages, currentPage) {
+      const paginationDiv = el('#pagination');
+      clear(paginationDiv);
+
+      if (totalPages <= 1) return;
+
+      // Previous button
+      if (currentPage > 1) {
+        const prev = document.createElement('button');
+        prev.textContent = '← ПРЕДЫДУЩАЯ';
+        prev.onclick = () => goToPage(currentPage - 1);
+        paginationDiv.appendChild(prev);
+      }
+
+      // Page numbers
+      for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.classList.toggle('active', i === currentPage);
+        btn.onclick = () => goToPage(i);
+        paginationDiv.appendChild(btn);
+      }
+
+      // Next button
+      if (currentPage < totalPages) {
+        const next = document.createElement('button');
+        next.textContent = 'СЛЕДУЮЩАЯ →';
+        next.onclick = () => goToPage(currentPage + 1);
+        paginationDiv.appendChild(next);
+      }
+    }
+
+    function goToPage(page) {
+      currentPage = page;
+      currentFilters.page = page;
+      loadProducts();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetFilters() {
+      elAll('#categories-filter input').forEach(cb => cb.checked = false);
+      elAll('#brands-filter input').forEach(cb => cb.checked = false);
+      el('#sort-select').value = 'newest';
+      applyFilters();
+    }
+
+    async function handleSearch() {
+      const query = el('#search-input').value.trim();
+      if (query.length >= 2) {
+        currentFilters.search = query;
+        currentFilters.page = 1;
+        loadProducts();
+      } else if (query.length === 0) {
+        delete currentFilters.search;
+        loadProducts();
+      }
+    }
+
+    // Initialize
+    loadFilters();
+    applyFilters();
+  </script>
+</body>
+</html>
