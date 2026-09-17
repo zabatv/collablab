@@ -21,7 +21,7 @@ CORS(app)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{BASE_DIR}/data/products.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024  # 200MB, product videos are large
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, '..', 'frontend', 'uploads')
 
 # Ensure upload folder exists
@@ -42,6 +42,20 @@ def require_admin(f):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+VIDEO_EXTENSIONS = {'.mp4', '.webm', '.ogg', '.ogv', '.mov', '.m4v'}
+
+def save_upload(file, product_id, allowed_extensions):
+    """Save an uploaded file under the uploads folder. Returns '/uploads/<name>'.
+    Uploads are served as static files, so only known media types are accepted."""
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in allowed_extensions:
+        raise ValueError(f'Недопустимый формат файла: {ext or "без расширения"}')
+
+    filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    return f'/uploads/{filename}'
 
 def save_image_bytes(product_id, data, ext):
     """Store raw image bytes in the uploads folder. Returns '/uploads/<name>'."""
@@ -320,26 +334,24 @@ def upload_product_image(product_id):
         return jsonify({'error': 'No file selected'}), 400
 
     try:
-        filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}_{file.filename}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        stored_path = save_upload(file, product_id, IMAGE_EXTENSIONS)
 
-        # Set as main image if it's the first one
         if not product.image:
-            product.image = f'/uploads/{filename}'
-            db.session.commit()
+            product.image = stored_path
 
-        # Add to product images
         product_image = ProductImage(
             product_id=product_id,
-            image_url=f'/uploads/{filename}',
+            image_url=stored_path,
             order=len(product.images)
         )
         db.session.add(product_image)
         db.session.commit()
 
-        return jsonify({'url': f'/uploads/{filename}'}), 201
+        return jsonify({'url': stored_path}), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/admin/products/<int:product_id>/set-image-url', methods=['POST'])
@@ -390,6 +402,37 @@ def upload_product_video(product_id):
         db.session.commit()
 
         return jsonify(video.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/admin/products/<int:product_id>/upload-video-file', methods=['POST'])
+@require_admin
+def upload_product_video_file(product_id):
+    """Upload a video file from the admin's computer"""
+    Product.query.get_or_404(product_id)
+
+    if 'video' not in request.files:
+        return jsonify({'error': 'Файл не передан'}), 400
+
+    file = request.files['video']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    try:
+        stored_path = save_upload(file, product_id, VIDEO_EXTENSIONS)
+
+        video = ProductVideo(
+            product_id=product_id,
+            video_url=stored_path,
+            title=request.form.get('title', '')
+        )
+        db.session.add(video)
+        db.session.commit()
+
+        return jsonify(video.to_dict()), 201
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400

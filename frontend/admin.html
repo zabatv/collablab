@@ -128,6 +128,81 @@
       background: #f5f5f5;
     }
 
+    .upload-drop {
+      border: 2px dashed var(--color-border);
+      border-radius: 6px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      background: #fafafa;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .upload-drop:hover,
+    .upload-drop.dragover {
+      border-color: var(--color-accent);
+      background: #f0f6ff;
+    }
+
+    .upload-drop-title {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .upload-drop-hint {
+      font-size: 12px;
+      color: var(--color-gray-dark);
+    }
+
+    .upload-url-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .upload-url-row input {
+      flex: 1;
+    }
+
+    .pending-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--color-accent);
+      margin-left: 8px;
+    }
+
+    .image-preview-grid figure {
+      margin: 0;
+      position: relative;
+      line-height: 0;
+    }
+
+    .image-preview-grid figure.pending img {
+      opacity: 0.6;
+      border-style: dashed;
+    }
+
+    .thumb-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.65);
+      color: #fff;
+      font-size: 15px;
+      line-height: 22px;
+      cursor: pointer;
+    }
+
+    .thumb-remove:hover {
+      background: #000;
+    }
+
     .video-row {
       display: flex;
       align-items: center;
@@ -399,35 +474,33 @@
         <button type="submit" class="btn btn-primary" style="width: 100%;">СОХРАНИТЬ</button>
       </form>
 
-      <div id="product-images" style="margin-top: 24px; display: none;">
+      <div id="product-images" style="margin-top: 24px;">
         <h4>ФОТО ТОВАРА</h4>
-        <div style="margin-bottom: 12px;">
-          <label style="font-size: 13px; font-weight: 600;">URL изображения</label>
-          <div style="display: flex; gap: 8px; margin-top: 4px;">
-            <input type="text" id="product-image-url" placeholder="https://example.com/image.jpg" style="flex: 1;">
-            <button type="button" class="btn btn-ghost" onclick="downloadImageByUrl()">Загрузить</button>
-          </div>
+        <div class="upload-drop" id="image-drop">
+          <input type="file" id="product-image-input" accept="image/*" multiple hidden>
+          <div class="upload-drop-title">Перетащите фото сюда</div>
+          <div class="upload-drop-hint">или нажмите, чтобы выбрать на компьютере — JPG, PNG, WEBP, GIF</div>
         </div>
-        <div style="margin-bottom: 12px;">
-          <label style="font-size: 13px; font-weight: 600;">Или загрузить файл</label>
-          <input type="file" id="product-image-input" accept="image/*" onchange="handleImageUpload()" style="margin-top: 4px;">
+        <div class="upload-url-row">
+          <input type="text" id="product-image-url" placeholder="Или вставьте ссылку на изображение">
+          <button type="button" class="btn btn-ghost" onclick="addImageByUrl()">Добавить</button>
         </div>
         <div id="product-images-list" style="margin-top: 12px;"></div>
       </div>
 
-      <div id="product-videos" style="margin-top: 24px; display: none;">
+      <div id="product-videos" style="margin-top: 24px;">
         <h4>ВИДЕО ТОВАРА</h4>
-        <div style="margin-bottom: 12px;">
-          <label style="font-size: 13px; font-weight: 600;">Ссылка на видео</label>
-          <div style="display: flex; gap: 8px; margin-top: 4px;">
-            <input type="text" id="product-video-url" placeholder="https://youtube.com/watch?v=..." style="flex: 1;">
-            <button type="button" class="btn btn-ghost" onclick="addVideoByUrl()">Добавить</button>
-          </div>
-          <small class="text-muted">YouTube, RuTube или прямая ссылка на файл MP4</small>
+        <div class="upload-drop" id="video-drop">
+          <input type="file" id="product-video-input" accept="video/*" multiple hidden>
+          <div class="upload-drop-title">Перетащите видео сюда</div>
+          <div class="upload-drop-hint">или нажмите, чтобы выбрать на компьютере — MP4, WEBM, MOV (до 200 МБ)</div>
         </div>
-        <div style="margin-bottom: 12px;">
-          <label style="font-size: 13px; font-weight: 600; display: block;">Название (необязательно)</label>
-          <input type="text" id="product-video-title" placeholder="Обзор товара" style="margin-top: 4px; width: 100%;">
+        <div class="upload-url-row">
+          <input type="text" id="product-video-url" placeholder="Или вставьте ссылку: YouTube, RuTube, MP4">
+          <button type="button" class="btn btn-ghost" onclick="addVideoByUrl()">Добавить</button>
+        </div>
+        <div class="upload-url-row">
+          <input type="text" id="product-video-title" placeholder="Название видео (необязательно)">
         </div>
         <div id="product-videos-list" style="margin-top: 12px;"></div>
       </div>
@@ -592,8 +665,8 @@
       currentProductId = null;
       el('#product-modal-title').textContent = 'ДОБАВИТЬ ТОВАР';
       el('#product-form').reset();
-      hide(el('#product-images'));
-      hide(el('#product-videos'));
+      resetPendingMedia();
+      renderMedia(null);
       el('#product-modal').classList.add('active');
     }
 
@@ -601,6 +674,7 @@
       try {
         const product = await ProductAPI.getProduct(id);
         currentProductId = id;
+        resetPendingMedia();
 
         el('#product-modal-title').textContent = 'РЕДАКТИРОВАТЬ ТОВАР';
         el('#product-sku').value = product.sku;
@@ -613,15 +687,7 @@
         el('#product-stock').value = product.stock;
         el('#product-active').checked = true;
 
-        show(el('#product-images'));
-        el('#product-images-list').innerHTML = product.images.length > 0
-          ? `<div class="image-preview-grid">${product.images.map(img =>
-              `<img src="${img.url}" alt="" onclick="openImagePreview('${img.url}')">`
-            ).join('')}</div>`
-          : '<p class="text-muted">Нет фото</p>';
-
-        show(el('#product-videos'));
-        renderVideoList(product.videos);
+        renderMedia(product);
 
         el('#product-modal').classList.add('active');
       } catch (error) {
@@ -629,53 +695,270 @@
       }
     }
 
-    function renderVideoList(videos) {
+    // Media picked before the product exists waits here until it has an id
+    const pendingMedia = { images: [], videos: [] };
+
+    function resetPendingMedia() {
+      pendingMedia.images.forEach(item => item.preview && URL.revokeObjectURL(item.preview));
+      pendingMedia.images = [];
+      pendingMedia.videos = [];
+    }
+
+    function renderMedia(product) {
+      renderImageList(product ? product.images : []);
+      renderVideoList(product ? product.videos : []);
+    }
+
+    function renderImageList(saved) {
+      const list = el('#product-images-list');
+      clear(list);
+
+      if (saved.length === 0 && pendingMedia.images.length === 0) {
+        list.innerHTML = '<p class="text-muted">Нет фото</p>';
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'image-preview-grid';
+
+      saved.forEach(img => {
+        const thumb = document.createElement('img');
+        thumb.src = img.url;
+        thumb.alt = '';
+        thumb.onclick = () => openImagePreview(img.url);
+        grid.appendChild(thumb);
+      });
+
+      pendingMedia.images.forEach((item, index) => {
+        const figure = document.createElement('figure');
+        figure.className = 'pending';
+
+        const thumb = document.createElement('img');
+        thumb.src = item.preview || item.url;
+        thumb.alt = '';
+        thumb.title = 'Загрузится после сохранения товара';
+        figure.appendChild(thumb);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'thumb-remove';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Убрать';
+        removeBtn.onclick = () => {
+          if (item.preview) URL.revokeObjectURL(item.preview);
+          pendingMedia.images.splice(index, 1);
+          renderImageList(saved);
+        };
+        figure.appendChild(removeBtn);
+
+        grid.appendChild(figure);
+      });
+
+      list.appendChild(grid);
+    }
+
+    function renderVideoList(saved) {
       const list = el('#product-videos-list');
-      if (!videos || videos.length === 0) {
+      clear(list);
+
+      if (saved.length === 0 && pendingMedia.videos.length === 0) {
         list.innerHTML = '<p class="text-muted">Нет видео</p>';
         return;
       }
 
-      clear(list);
-      videos.forEach(video => {
+      const addRow = (label, onRemove, isPending) => {
         const row = document.createElement('div');
         row.className = 'video-row';
 
-        const link = document.createElement('a');
-        link.href = video.url;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        link.textContent = video.title || video.url;
-        row.appendChild(link);
+        const text = document.createElement('span');
+        text.textContent = label;
+        row.appendChild(text);
+
+        if (isPending) {
+          const badge = document.createElement('span');
+          badge.className = 'pending-badge';
+          badge.textContent = 'ожидает сохранения';
+          text.appendChild(badge);
+        }
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-ghost';
-        removeBtn.textContent = 'Удалить';
-        removeBtn.onclick = () => deleteVideo(video.id);
+        removeBtn.textContent = isPending ? 'Убрать' : 'Удалить';
+        removeBtn.onclick = onRemove;
         row.appendChild(removeBtn);
 
         list.appendChild(row);
+      };
+
+      saved.forEach(video => addRow(video.title || video.url, () => deleteVideo(video.id), false));
+      pendingMedia.videos.forEach((item, index) => {
+        addRow(item.title || item.file?.name || item.url, () => {
+          pendingMedia.videos.splice(index, 1);
+          renderVideoList(saved);
+        }, true);
       });
+    }
+
+    async function addImageFiles(files) {
+      const chosen = rejectOversized(Array.from(files || []));
+      if (chosen.length === 0) return;
+
+      if (!currentProductId) {
+        chosen.forEach(file => pendingMedia.images.push({ file, preview: URL.createObjectURL(file) }));
+        renderMedia(null);
+        showNotification('Фото загрузится после сохранения товара');
+        return;
+      }
+
+      try {
+        for (const file of chosen) {
+          await AdminAPI.uploadImage(currentProductId, file);
+        }
+        showNotification(chosen.length > 1 ? 'Фото загружены' : 'Фото загружено');
+        editProduct(currentProductId);
+      } catch (error) {
+        showNotification('Ошибка загрузки: ' + error.message, 'error');
+      }
+    }
+
+    async function addImageByUrl() {
+      const url = el('#product-image-url').value.trim();
+      if (!url) return;
+
+      el('#product-image-url').value = '';
+
+      if (!currentProductId) {
+        pendingMedia.images.push({ url });
+        renderMedia(null);
+        showNotification('Фото загрузится после сохранения товара');
+        return;
+      }
+
+      try {
+        await downloadImageByUrl(currentProductId, url);
+        showNotification('Фото загружено');
+        editProduct(currentProductId);
+      } catch (error) {
+        showNotification('Ошибка: ' + error.message, 'error');
+      }
+    }
+
+    async function downloadImageByUrl(productId, url) {
+      const response = await fetch(`${API_BASE}/admin/products/${productId}/set-image-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Key': localStorage.getItem('admin_key') },
+        body: JSON.stringify({ url })
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error);
+      return result;
+    }
+
+    const MAX_UPLOAD_BYTES = 200 * 1024 * 1024;
+
+    function rejectOversized(files) {
+      const tooBig = files.filter(file => file.size > MAX_UPLOAD_BYTES);
+      tooBig.forEach(file =>
+        showNotification(`"${file.name}" больше 200 МБ и не будет загружен`, 'error'));
+      return files.filter(file => file.size <= MAX_UPLOAD_BYTES);
+    }
+
+    async function addVideoFiles(files) {
+      const chosen = rejectOversized(Array.from(files || []));
+      if (chosen.length === 0) return;
+
+      const title = el('#product-video-title').value.trim();
+      el('#product-video-title').value = '';
+
+      if (!currentProductId) {
+        chosen.forEach(file => pendingMedia.videos.push({ file, title }));
+        renderMedia(null);
+        showNotification('Видео загрузится после сохранения товара');
+        return;
+      }
+
+      try {
+        for (const file of chosen) {
+          await AdminAPI.uploadVideoFile(currentProductId, file, title);
+        }
+        showNotification(chosen.length > 1 ? 'Видео загружены' : 'Видео загружено');
+        editProduct(currentProductId);
+      } catch (error) {
+        showNotification('Ошибка загрузки: ' + error.message, 'error');
+      }
     }
 
     async function addVideoByUrl() {
       const url = el('#product-video-url').value.trim();
       if (!url) return;
 
+      const title = el('#product-video-title').value.trim();
+      el('#product-video-url').value = '';
+      el('#product-video-title').value = '';
+
+      if (!currentProductId) {
+        pendingMedia.videos.push({ url, title });
+        renderMedia(null);
+        showNotification('Видео добавится после сохранения товара');
+        return;
+      }
+
       try {
-        await AdminAPI.addVideo(currentProductId, {
-          url,
-          title: el('#product-video-title').value.trim()
-        });
-        el('#product-video-url').value = '';
-        el('#product-video-title').value = '';
+        await AdminAPI.addVideo(currentProductId, { url, title });
         showNotification('Видео добавлено');
         editProduct(currentProductId);
       } catch (error) {
         showNotification('Не удалось добавить видео: ' + error.message, 'error');
       }
     }
+
+    // Uploads everything queued while the product had no id yet
+    async function flushPendingMedia(productId) {
+      for (const item of pendingMedia.images) {
+        if (item.file) {
+          await AdminAPI.uploadImage(productId, item.file);
+        } else {
+          await downloadImageByUrl(productId, item.url);
+        }
+      }
+
+      for (const item of pendingMedia.videos) {
+        if (item.file) {
+          await AdminAPI.uploadVideoFile(productId, item.file, item.title);
+        } else {
+          await AdminAPI.addVideo(productId, { url: item.url, title: item.title });
+        }
+      }
+
+      resetPendingMedia();
+    }
+
+    function setupDropzone(zoneId, inputId, onFiles) {
+      const zone = el(zoneId);
+      const input = el(inputId);
+
+      zone.onclick = () => input.click();
+      input.onchange = () => {
+        onFiles(input.files);
+        input.value = '';
+      };
+
+      zone.ondragover = (e) => {
+        e.preventDefault();
+        zone.classList.add('dragover');
+      };
+      zone.ondragleave = () => zone.classList.remove('dragover');
+      zone.ondrop = (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        onFiles(e.dataTransfer.files);
+      };
+    }
+
+    setupDropzone('#image-drop', '#product-image-input', addImageFiles);
+    setupDropzone('#video-drop', '#product-video-input', addVideoFiles);
 
     async function deleteVideo(videoId) {
       if (!confirm('Удалить это видео?')) return;
@@ -692,6 +975,7 @@
     function closeProductModal() {
       el('#product-modal').classList.remove('active');
       currentProductId = null;
+      resetPendingMedia();
     }
 
     function openImagePreview(url) {
@@ -727,14 +1011,22 @@
         if (currentProductId) {
           await AdminAPI.updateProduct(currentProductId, data);
           showNotification('Товар обновлён');
+          loadProducts();
         } else {
           const product = await AdminAPI.createProduct(data);
+          // Claim the id before uploads, so a failed upload cannot lead to a duplicate on retry
           currentProductId = product.id;
-          showNotification('Товар добавлен');
-          show(el('#product-images'));
-        }
+          const queued = pendingMedia.images.length + pendingMedia.videos.length;
 
-        loadProducts();
+          if (queued > 0) {
+            showNotification('Товар добавлен, загружаю медиафайлы...');
+            await flushPendingMedia(product.id);
+          }
+
+          showNotification('Товар добавлен');
+          loadProducts();
+          editProduct(product.id);
+        }
       } catch (error) {
         showNotification('Ошибка: ' + error.message, 'error');
       }

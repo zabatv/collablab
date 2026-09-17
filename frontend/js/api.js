@@ -88,15 +88,34 @@ const AdminAPI = {
   },
 
   uploadImage: (productId, file) => {
-    const headers = { 'X-Admin-Key': localStorage.getItem('admin_key') };
     const formData = new FormData();
     formData.append('image', file);
 
     return fetch(`${API_BASE}/admin/products/${productId}/upload-image`, {
       method: 'POST',
-      headers: { 'X-Admin-Key': headers['X-Admin-Key'] },
+      headers: { 'X-Admin-Key': localStorage.getItem('admin_key') },
       body: formData
-    }).then(res => res.json());
+    }).then(async res => {
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      return result;
+    });
+  },
+
+  uploadVideoFile: (productId, file, title = '') => {
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('title', title);
+
+    return fetch(`${API_BASE}/admin/products/${productId}/upload-video-file`, {
+      method: 'POST',
+      headers: { 'X-Admin-Key': localStorage.getItem('admin_key') },
+      body: formData
+    }).then(async res => {
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error);
+      return result;
+    });
   },
 
   addVideo: (productId, data) => {
