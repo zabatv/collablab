@@ -639,6 +639,34 @@ def admin_brands():
 
 # ===== EXCEL IMPORT/EXPORT =====
 
+# Specifications travel in one cell as "параметр: значение", one pair per line
+# or separated by a semicolon
+SPEC_SEPARATORS = (':', '=', '—', '-')
+
+def format_specifications(specifications):
+    return '\n'.join(f'{spec.name}: {spec.value}' for spec in specifications)
+
+def parse_specifications(text):
+    """Turn a cell into (name, value) pairs, ignoring anything unreadable"""
+    pairs = []
+
+    for line in str(text or '').replace(';', '\n').split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+
+        # The first separator present wins, so a value may contain the others
+        position = min((line.find(s) for s in SPEC_SEPARATORS if line.find(s) > 0), default=-1)
+        if position < 0:
+            continue
+
+        name = line[:position].strip()
+        value = line[position + 1:].strip()
+        if name and value:
+            pairs.append((name[:100], value[:255]))
+
+    return pairs
+
 @app.route('/api/admin/export/excel', methods=['GET'])
 @require_admin
 def export_excel():
@@ -659,9 +687,10 @@ def export_excel():
     )
 
     # Headers
-    headers = ['ID', 'Артикул', 'Название', 'Фото товара', 'Описание', 'Категория', 'Бренд',
-               'Цена', 'Старая цена', 'Остаток', 'Активен']
+    headers = ['ID', 'Артикул', 'Название', 'Фото товара', 'Описание', 'Характеристики',
+               'Категория', 'Бренд', 'Цена', 'Старая цена', 'Остаток', 'Активен']
     photo_col = headers.index('Фото товара') + 1
+    specs_col = headers.index('Характеристики') + 1
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col, value=header)
         cell.font = header_font
@@ -679,6 +708,7 @@ def export_excel():
             product.name,
             '',
             product.description or '',
+            format_specifications(product.specifications),
             product.category.name if product.category else '',
             product.brand.name if product.brand else '',
             product.price,
@@ -689,10 +719,13 @@ def export_excel():
         for col, value in enumerate(data, 1):
             cell = ws.cell(row=row, column=col, value=value)
             cell.border = thin_border
-            if col in [8, 9]:  # Price columns
+            if col in [9, 10]:  # Price columns
                 cell.number_format = '#,##0.00'
-            elif col == 10:  # Stock
+            elif col == 11:  # Stock
                 cell.number_format = '#,##0'
+            elif col == specs_col:
+                # One pair per line, so the cell has to show its line breaks
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
 
         image_path = product_image_path(product)
         if image_path:
@@ -775,6 +808,7 @@ def import_excel():
         stock_col = find_by_header('остаток', 'количество', 'кол-во', 'stock')
         desc_col = find_by_header('описание', 'description')
         image_col = find_by_header('изображен', 'картин', 'фото', 'image', 'photo')
+        specs_col = find_by_header('характеристик', 'параметр', 'spec')
 
         if old_price_col == price_col:
             old_price_col = None
@@ -928,6 +962,15 @@ def import_excel():
                     db.session.add(product)
                     db.session.flush()
                     imported += 1
+
+                # A filled cell replaces what the product had; an empty one leaves it alone
+                if specs_col:
+                    pairs = parse_specifications(ws.cell(row=row, column=specs_col).value)
+                    if pairs:
+                        Specification.query.filter_by(product_id=product.id).delete()
+                        for spec_name, spec_value in pairs:
+                            db.session.add(Specification(
+                                product_id=product.id, name=spec_name, value=spec_value))
 
                 if not product.image:
                     try:
