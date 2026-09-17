@@ -4,137 +4,17 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>CollabLab — мультиплеер-компилятор</title>
-<style>
-  :root{
-    --bg:#070a13; --panel:rgba(20,26,43,.66); --panel2:#141a2b;
-    --border:#2a3550; --border2:#3b4a70; --fg:#e8ecf6; --muted:#8fa0bf;
-    --accent:#6c8cff; --accent2:#9a6cff; --green:#34d399; --red:#f87171;
-    --yellow:#fbbf24; --cyan:#38bdf8; --purple:#c084fc;
-    --mono:ui-monospace,"Cascadia Code",Consolas,Menlo,monospace;
-    --grad:linear-gradient(120deg,var(--accent),var(--purple),var(--cyan));
-    --shadow:0 18px 50px rgba(0,0,0,.45);
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%}
-  body{margin:0;background:radial-gradient(900px 500px at 15% -5%,rgba(108,140,255,.16),transparent 60%),
-    radial-gradient(800px 500px at 105% 10%,rgba(192,132,252,.12),transparent 60%),
-    radial-gradient(700px 600px at 50% 115%,rgba(56,189,248,.10),transparent 60%),
-    var(--bg);color:var(--fg);
-    font:14px/1.5 -apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif;
-    min-height:100vh;display:flex;flex-direction:column;
-    background-attachment:fixed;}
-  ::-webkit-scrollbar{width:10px;height:10px}
-  ::-webkit-scrollbar-thumb{background:#2a3550;border-radius:0;border:2px solid var(--bg)}
-  ::-webkit-scrollbar-track{background:transparent}
-
-  header{display:flex;align-items:center;gap:14px;padding:16px 24px;flex-wrap:wrap;
-    backdrop-filter:blur(10px);background:rgba(10,14,25,.6);
-    border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;}
-  header h1{margin:0;font-size:20px;font-weight:800;letter-spacing:.4px;
-    background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;
-    filter:drop-shadow(0 0 18px rgba(108,140,255,.35));}
-  .header-note{color:var(--muted);font-size:12px;letter-spacing:.2px;}
-  .badge{display:inline-flex;align-items:center;gap:7px;font-size:12px;padding:4px 13px;border-radius:0;
-    border:1px solid var(--border);color:var(--muted);background:var(--panel2);}
-  .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--green);
-    box-shadow:0 0 10px var(--green);animation:pulse 2s infinite;}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  .who{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--fg);
-    background:var(--panel2);border:1px solid var(--border);border-radius:0;padding:4px 13px;}
-  .who .avatar{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
-    background:var(--grad);color:#fff;font-size:11px;font-weight:700;}
-  button.link{background:transparent;border:1px solid var(--border);color:var(--muted);
-    padding:5px 13px;border-radius:0;font-size:12px;cursor:pointer;transition:.15s;}
-  button.link:hover{color:var(--red);border-color:var(--red)}
-
-  .wrap{max-width:1020px;margin:0 auto;padding:30px 20px 60px;width:100%;flex:1;}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:0;
-    padding:22px;box-shadow:var(--shadow);backdrop-filter:blur(12px);position:relative;overflow:hidden;}
-  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;
-    background:var(--grad);opacity:.6;}
-  .card h2{margin:0 0 4px;font-size:15px;font-weight:700;color:var(--fg);}
-  .card .sub{color:var(--muted);font-size:12px;margin:0 0 16px;}
-
-  input[type=text],input[type=email],input[type=password]{background:#0c1120;
-    border:1px solid var(--border);color:var(--fg);border-radius:0;
-    padding:10px 13px;font-size:14px;outline:none;flex:1;min-width:170px;
-    transition:border-color .15s,box-shadow .15s;}
-  input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,140,255,.18)}
-  select{background:#0c1120;color:var(--fg);border:1px solid var(--border);
-    border-radius:0;padding:10px 12px;font-size:14px;outline:none;cursor:pointer}
-  select:focus{border-color:var(--accent)}
-  button{background:var(--panel2);border:1px solid var(--border);color:var(--fg);
-    border-radius:0;padding:9px 18px;cursor:pointer;font-size:14px;transition:.15s;}
-  button:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
-  button.primary{background:var(--grad);border:none;color:#fff;font-weight:600;
-    box-shadow:0 6px 22px rgba(108,140,255,.32);}
-  button.primary:hover{filter:brightness(1.1);color:#fff;box-shadow:0 8px 28px rgba(108,140,255,.45)}
-
-  .create-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
-
-  .filters{display:flex;gap:8px;margin:16px 0 4px;flex-wrap:wrap;}
-  .filter{padding:6px 16px;font-size:13px;border-radius:0;border-color:var(--border);color:var(--muted);}
-  .filter:hover{transform:none}
-  .filter.on{background:rgba(108,140,255,.14);border-color:var(--accent);color:var(--accent);font-weight:600}
-
-  .rooms{margin-top:12px;display:flex;flex-direction:column;gap:10px;}
-  .rrow{display:flex;align-items:center;gap:14px;padding:13px 16px;
-    background:var(--panel2);border:1px solid var(--border);border-radius:0;
-    transition:.15s;}
-  .rrow:hover{border-color:var(--border2);transform:translateX(4px);box-shadow:0 8px 24px rgba(0,0,0,.3)}
-  .rtype{width:52px;flex-shrink:0;}
-  .kbadge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:0;
-    font-family:var(--mono);font-variant:small-caps;}
-  .kbadge.kxml{color:var(--green);background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.4)}
-  .kbadge.kcsharp{color:var(--accent);background:rgba(108,140,255,.12);border:1px solid rgba(108,140,255,.4)}
-  .kbadge.khtml{color:var(--cyan);background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.4)}
-  .roomname{font-weight:700;font-size:14px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .peers{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);white-space:nowrap;}
-  .pdot{width:8px;height:8px;border-radius:50%;display:inline-block;}
-  .pdot.g{background:var(--green);box-shadow:0 0 8px var(--green)}
-  .pdot.y{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
-  .activity{color:var(--muted);font-size:12px;white-space:nowrap;min-width:70px;text-align:right;}
-  a.open{color:var(--accent);text-decoration:none;font-weight:600;font-size:13px;white-space:nowrap;
-    border:1px solid var(--border);border-radius:0;padding:6px 13px;transition:.15s;}
-  a.open:hover{background:rgba(108,140,255,.12);border-color:var(--accent)}
-  .empty{color:var(--muted);text-align:center;padding:36px 0;font-size:13px;}
-
-  .live-in{position:relative;display:inline-flex;align-items:center;gap:7px;cursor:pointer;
-    color:var(--green);font-size:12px;font-weight:500;}
-  .live-in::before{content:"";width:8px;height:8px;border-radius:50%;
-    background:var(--green);animation:pulse 1.6s infinite;}
-
-  /* auth */
-  .auth-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:30px 20px;}
-  .auth{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--border);
-    border-radius:0;padding:30px;box-shadow:var(--shadow);backdrop-filter:blur(14px);
-    position:relative;overflow:hidden;}
-  .auth::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad);}
-  .auth .logo{font-size:30px;font-weight:800;letter-spacing:.5px;margin:0 0 2px;
-    background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
-  .auth .sub{color:var(--muted);font-size:12px;margin:0 0 20px;}
-  .atabs{display:flex;gap:4px;margin-bottom:20px;background:var(--panel2);
-    border:1px solid var(--border);border-radius:0;padding:4px;}
-  .atab{flex:1;background:transparent;border:0;padding:9px;font-size:13px;color:var(--muted);
-    cursor:pointer;border-radius:0;}
-  .atab.on{background:var(--grad);color:#fff;font-weight:600;box-shadow:0 4px 16px rgba(108,140,255,.3)}
-  .auth label{display:block;font-size:12px;color:var(--muted);margin:13px 0 5px;font-weight:500;}
-  .auth input{width:100%;min-width:0;}
-  .rem{display:flex;align-items:center;gap:8px;margin:15px 0;font-size:13px;color:var(--muted);
-    cursor:pointer;user-select:none;}
-  .rem input{width:auto;min-width:0;accent-color:var(--accent);flex:0;width:15px;height:15px;}
-  .aerr{color:var(--red);font-size:13px;min-height:18px;margin-top:8px;}
-  .aok{color:var(--green);font-size:13px;min-height:18px;margin-top:8px;}
-  .hidden{display:none !important}
-</style>
+<link rel="stylesheet" href="css/theme.css"/>
+<link rel="stylesheet" href="css/index.css"/>
 </head>
 <body>
-<svg style="display:none">
+<svg style="display:none" aria-hidden="true">
   <defs>
     <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
     <symbol id="i-arr" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
   </defs>
 </svg>
+
 <header>
   <h1>CollabLab</h1>
   <span class="header-note">мультиплеер-компилятор · XML, C# и HTML в реальном времени</span>
@@ -143,7 +23,6 @@
   <button class="link hidden" id="logout" style="margin-left:0">выйти</button>
 </header>
 
-<!-- ═══ АВТОРИЗАЦИЯ ═══ -->
 <div class="auth-wrap hidden" id="authwrap">
   <div class="auth">
     <h2 class="logo">CollabLab</h2>
@@ -165,7 +44,6 @@
   </div>
 </div>
 
-<!-- ═══ ПРИЛОЖЕНИЕ ═══ -->
 <div id="app" class="wrap hidden">
   <div class="card">
     <h2>Создать комнату</h2>
@@ -196,133 +74,10 @@
   </div>
 </div>
 
-<footer style="color:var(--muted);font-size:12px;text-align:center;padding:20px;border-top:1px solid var(--border)">
+<footer>
   Открой страницу у себя и у друга с одной комнатой — и печатайте вместе.
 </footer>
-<script>
-const $=id=>document.getElementById(id);
-let rooms=[], filter='', mode='login';
-const KIND_LABEL={xml:'XML',csharp:'C#',html:'HTML'};
 
-function setMode(m){
-  mode=m;
-  $('tab-l').classList.toggle('on',m==='login');
-  $('tab-r').classList.toggle('on',m==='reg');
-  $('asub').textContent=m==='login'?'Войти':'Создать аккаунт';
-  $('aok').textContent='';
-  $('aerr').textContent='';
-  const reg=m==='reg';
-  $('namelab').classList.toggle('hidden',!reg);
-  $('aname').classList.toggle('hidden',!reg);
-  $('rem').classList.toggle('hidden',!reg);
-  if(reg)$('aname').focus();
-  $('apass').placeholder=m==='login'?'пароль':'минимум 6 символов';
-}
-async function doAuth(){
-  const email=$('aemail').value.trim().toLowerCase();
-  const pw=$('apass').value;
-  const name=($('aname').value||'').trim().slice(0,32);
-  $('aerr').textContent=''; $('aok').textContent='';
-  if(!email||email.indexOf('@')<1){$('aerr').textContent='Введите корректную почту';return;}
-  if(pw.length<6){$('aerr').textContent='Пароль: минимум 6 символов';return;}
-  if(mode==='reg'&&!name){$('aerr').textContent='Введите никнейм';return;}
-  const btn=$('asub'); btn.disabled=true; btn.textContent='…';
-  try{
-    if(mode==='reg'){
-      const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({email,password:pw,name})});
-      const j=await r.json();
-      if(!r.ok){$('aerr').textContent=j.error||'Ошибка регистрации';return;}
-    }
-    const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({email,password:pw,remember:$('arem').checked})});
-    const j=await r.json();
-    if(!r.ok||!j.ok){$('aerr').textContent=j.error||'Ошибка входа';return;}
-    showApp(j.name||name||email.split('@')[0], email);
-  }catch(e){
-    $('aerr').textContent='Сеть/сервер недоступны';
-  }finally{
-    btn.disabled=false;
-    if(mode==='login')btn.textContent='Войти';else btn.textContent='Создать аккаунт';
-  }
-}
-function showApp(name,email){
-  $('authwrap').classList.add('hidden');
-  $('app').classList.remove('hidden');
-  $('who').classList.remove('hidden');
-  $('logout').classList.remove('hidden');
-  $('whoName').textContent=(name||email);
-  refresh();
-  if(!window._timer)window._timer=setInterval(refresh,2000);
-}
-function showAuth(){
-  $('app').classList.add('hidden');
-  $('who').classList.add('hidden');
-  $('logout').classList.add('hidden');
-  $('authwrap').classList.remove('hidden');
-  if(window._timer){clearInterval(window._timer);window._timer=null;}
-}
-$('logout').addEventListener('click',async()=>{
-  try{await fetch('/api/logout',{method:'POST'});}catch(e){}
-  showAuth();
-});
-$('aemail').addEventListener('keydown',e=>{if(e.key==='Enter')$('apass').focus();});
-$('apass').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth();});
-
-(async()=>{
-  try{
-    const r=await fetch('/api/me',{cache:'no-store'});
-    if(r.ok){
-      const j=await r.json();
-      if(j.ok){showApp(j.name,j.email);return;}
-    }
-  }catch(e){}
-  showAuth();
-})();
-
-async function refresh(){
-  try{
-    const r=await fetch('/api/rooms',{cache:'no-store'});
-    const d=await r.json();
-    rooms=d.rooms||[];
-  }catch(e){}
-  render();
-}
-function setFilter(k){
-  filter=k;
-  document.querySelectorAll('.filter').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
-  render();
-}
-function rel(u){
-  if(u<6) return 'сейчас';
-  if(u<60) return Math.floor(u)+' с назад';
-  if(u<3600) return Math.floor(u/60)+' мин назад';
-  return Math.floor(u/3600)+' ч назад';
-}
-function render(){
-  $('total').textContent='комнат: '+rooms.length;
-  const rows=$('rows');
-  rows.innerHTML='';
-  const list=rooms.filter(r=>!filter||r.kind===filter);
-  $('empty').style.display=list.length?'none':'block';
-  for(const r of list){
-    const d=document.createElement('div');
-    d.className='rrow';
-    d.innerHTML=`
-      <div class="rtype"><span class="kbadge k${r.kind}">${KIND_LABEL[r.kind]||r.kind}</span></div>
-      <span class="roomname" title="${r.name.replace(/"/g,'&quot;')}">${r.name.replace(/</g,'&lt;')}</span>
-      <span class="peers"><span class="pdot ${r.peers>1?'g':'y'}"></span>${r.peers}</span>
-      <span class="activity">${rel(r.updated)}</span>
-      <a class="open" href="/room.html?name=${encodeURIComponent(r.name)}&kind=${r.kind}">открыть →</a>`;
-    rows.appendChild(d);
-  }
-}
-function create(){
-  const name=$('name').value.trim().slice(0,64)||('room'+Math.floor(Math.random()*900+100));
-  const kind=$('kind').value;
-  location.href='/room.html?name='+encodeURIComponent(name)+'&kind='+kind;
-}
-$('livein').addEventListener('click',refresh);
-</script>
+<script src="js/index.js"></script>
 </body>
 </html>

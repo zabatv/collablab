@@ -1,0 +1,208 @@
+/* ═══════════════════════════════════════════════════════════════
+   COLLABLAB: ДИЗАЙН СИСТЕМЫ И ПЕРЕМЕННЫЕ
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Цвета фона */
+  --bg: #070a13;
+  --panel: rgba(20, 26, 43, 0.66);
+  --panel2: #141a2b;
+  --panel3: #0a0f1d;
+
+  /* Границы */
+  --border: #2a3550;
+  --border2: #3b4a70;
+
+  /* Текст */
+  --fg: #e8ecf6;
+  --muted: #8fa0bf;
+
+  /* Акценты */
+  --accent: #6c8cff;
+  --accent2: #9a6cff;
+  --green: #34d399;
+  --red: #f87171;
+  --yellow: #fbbf24;
+  --cyan: #38bdf8;
+  --purple: #c084fc;
+
+  /* Типографика */
+  --mono: ui-monospace, "Cascadia Code", Consolas, Menlo, monospace;
+  --sans: -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+
+  /* Эффекты */
+  --grad: linear-gradient(120deg, var(--accent), var(--purple), var(--cyan));
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+  /* Переходы */
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-long: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(900px 500px at 15% -5%, rgba(108, 140, 255, 0.16), transparent 60%),
+    radial-gradient(800px 500px at 105% 10%, rgba(192, 132, 252, 0.12), transparent 60%),
+    radial-gradient(700px 600px at 50% 115%, rgba(56, 189, 248, 0.1), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--fg);
+  font: 14px / 1.5 var(--sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ───── Скроллбары ───── */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 0;
+  border: 2px solid var(--bg);
+  transition: background var(--transition);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border2);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ───── Кнопки ───── */
+button {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  border-radius: 0;
+  transition: all var(--transition);
+  font-family: var(--sans);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--grad);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 6px 22px rgba(108, 140, 255, 0.32);
+}
+
+button.primary:hover {
+  filter: brightness(1.1);
+  color: #fff;
+  box-shadow: 0 8px 28px rgba(108, 140, 255, 0.45);
+}
+
+/* ───── Инпуты ───── */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+  background: #0c1120;
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 0;
+  padding: 10px 13px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--transition), box-shadow var(--transition);
+  font-family: var(--sans);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(108, 140, 255, 0.18);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #5c6b8d;
+}
+
+select {
+  cursor: pointer;
+  padding: 10px 12px;
+}
+
+/* ───── Анимации ───── */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
