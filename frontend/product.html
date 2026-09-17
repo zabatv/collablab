@@ -238,7 +238,7 @@
         return frame;
       }
 
-      if (/\.(mp4|webm|ogg)(\?|$)/i.test(url)) {
+      if (/\.(mp4|webm|ogg|ogv|mov|m4v)(\?|$)/i.test(url)) {
         const video = document.createElement('video');
         video.src = url;
         video.controls = true;
@@ -250,7 +250,9 @@
 
     function renderVideos(videos) {
       const section = el('#product-videos-section');
-      const playable = (videos || []).filter(v => /^https?:\/\//i.test(v.url));
+      // Uploaded files are stored as site-relative paths; anything else must be a real link
+      const playable = (videos || []).filter(v =>
+        v.url.startsWith('/uploads/') || /^https?:\/\//i.test(v.url));
       if (playable.length === 0) return;
 
       const heading = document.createElement('h3');
