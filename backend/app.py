@@ -8,6 +8,7 @@ from functools import wraps
 import io
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -37,6 +38,29 @@ def require_admin(f):
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+def download_image_to_uploads(product_id, url):
+    """Download an image from a URL and save it to the uploads folder.
+    Returns the stored path (e.g. '/uploads/xyz.jpg') or None if it fails."""
+    resp = requests.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
+    if resp.status_code != 200:
+        return None
+
+    content_type = resp.headers.get('Content-Type', '')
+    if 'image' not in content_type:
+        return None
+
+    ext = '.jpg'
+    if 'png' in content_type: ext = '.png'
+    elif 'webp' in content_type: ext = '.webp'
+    elif 'gif' in content_type: ext = '.gif'
+
+    filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    with open(filepath, 'wb') as f:
+        f.write(resp.content)
+
+    return f'/uploads/{filename}'
 
 # ===== API Routes =====
 
@@ -253,38 +277,22 @@ def set_product_image_url(product_id):
         return jsonify({'error': 'URL not provided'}), 400
 
     try:
-        import requests as req
-        resp = req.get(url, timeout=15, headers={'User-Agent': 'Mozilla/5.0'})
-        if resp.status_code != 200:
-            return jsonify({'error': f'Failed to download: HTTP {resp.status_code}'}), 400
-
-        content_type = resp.headers.get('Content-Type', '')
-        if 'image' not in content_type:
-            return jsonify({'error': 'URL does not point to an image'}), 400
-
-        ext = '.jpg'
-        if 'png' in content_type: ext = '.png'
-        elif 'webp' in content_type: ext = '.webp'
-        elif 'gif' in content_type: ext = '.gif'
-
-        filename = secure_filename(f"{product_id}_{datetime.now().timestamp()}{ext}")
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-
-        with open(filepath, 'wb') as f:
-            f.write(resp.content)
+        stored_path = download_image_to_uploads(product_id, url)
+        if not stored_path:
+            return jsonify({'error': 'Failed to download image from URL'}), 400
 
         if not product.image:
-            product.image = f'/uploads/{filename}'
+            product.image = stored_path
 
         product_image = ProductImage(
             product_id=product_id,
-            image_url=f'/uploads/{filename}',
+            image_url=stored_path,
             order=len(product.images)
         )
         db.session.add(product_image)
         db.session.commit()
 
-        return jsonify({'url': f'/uploads/{filename}'}), 201
+        return jsonify({'url': stored_path}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
@@ -480,6 +488,7 @@ def import_excel():
         brand_col = None
         old_price_col = None
         stock_col = None
+        image_col = None
 
         for col in range(1, ws.max_column + 1):
             if col in [sku_col, name_col, price_col]:
@@ -498,6 +507,8 @@ def import_excel():
                 old_price_col = col
             elif 'остаток' in cell_value or 'кол' in cell_value or 'stock' in cell_value or 'количество' in cell_value:
                 stock_col = col
+            elif 'изображен' in cell_value or 'картин' in cell_value or 'фото' in cell_value or 'image' in cell_value or 'photo' in cell_value:
+                image_col = col
 
         imported = 0
         updated = 0
@@ -562,6 +573,11 @@ def import_excel():
                 if desc_col:
                     description = str(ws.cell(row=row, column=desc_col).value or '').strip()
 
+                # Get image URL
+                image_url = ''
+                if image_col:
+                    image_url = str(ws.cell(row=row, column=image_col).value or '').strip()
+
                 # Check if product exists
                 existing = Product.query.filter_by(sku=sku).first()
                 if existing:
@@ -575,6 +591,8 @@ def import_excel():
                     existing.old_price = old_price if old_price else existing.old_price
                     existing.stock = stock
                     existing.updated_at = datetime.utcnow()
+                    db.session.flush()
+                    product = existing
                     updated += 1
                 else:
                     if not category:
@@ -595,7 +613,21 @@ def import_excel():
                         stock=stock
                     )
                     db.session.add(product)
+                    db.session.flush()
                     imported += 1
+
+                if image_url and image_url.startswith(('http://', 'https://')) and not product.image:
+                    try:
+                        stored_path = download_image_to_uploads(product.id, image_url)
+                        if stored_path:
+                            product.image = stored_path
+                            db.session.add(ProductImage(
+                                product_id=product.id,
+                                image_url=stored_path,
+                                order=0
+                            ))
+                    except Exception as img_error:
+                        errors.append(f"Строка {row}: не удалось скачать картинку ({img_error})")
 
             except Exception as e:
                 errors.append(f"Строка {row}: {str(e)}")
