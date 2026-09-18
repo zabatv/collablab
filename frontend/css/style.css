@@ -1460,6 +1460,122 @@ footer {
   z-index: 9998;
 }
 
+/* ===== STORAGE NOTICE ===== */
+.consent {
+  position: fixed;
+  left: max(var(--space-md), env(safe-area-inset-left));
+  right: max(var(--space-md), env(safe-area-inset-right));
+  bottom: calc(var(--space-md) + env(safe-area-inset-bottom));
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-md) var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  /* Comes up from the edge it sits on rather than out of nothing */
+  opacity: 0;
+  transform: translateY(12px) scale(0.99);
+  transition: opacity var(--settle) var(--ease-out), transform var(--settle) var(--ease-out);
+}
+
+.consent.is-shown {
+  opacity: 1;
+  transform: none;
+}
+
+.consent-text {
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.consent-text strong {
+  color: var(--ink);
+}
+
+.consent-actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .consent {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .consent-actions .btn {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+}
+
+/* ===== LEGAL PAGES ===== */
+.legal {
+  max-width: 68ch;
+  padding-block: var(--space-xl) var(--space-2xl);
+}
+
+.legal h1 {
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-xs);
+}
+
+.legal .legal-updated {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  margin-bottom: var(--space-xl);
+}
+
+.legal h2 {
+  font-size: var(--text-md);
+  margin: var(--space-xl) 0 var(--space-xs);
+}
+
+.legal p,
+.legal li {
+  font-size: var(--text-sm);
+  line-height: 1.65;
+  color: var(--ink-soft);
+  margin-bottom: var(--space-xs);
+}
+
+.legal ul,
+.legal ol {
+  padding-left: 1.3em;
+  margin-bottom: var(--space-md);
+}
+
+.legal strong {
+  color: var(--ink);
+}
+
+/* What the owner has to fill in before this goes live */
+.legal mark {
+  background: #fff3cd;
+  color: #6b4d00;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.legal-note {
+  margin-bottom: var(--space-xl);
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--accent);
+  background: var(--surface-sunken);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
 /* ===== TOASTS ===== */
 #notification-stack {
   position: fixed;
