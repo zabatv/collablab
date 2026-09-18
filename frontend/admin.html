@@ -312,6 +312,72 @@
       object-fit: contain;
     }
 
+    .spec-editor {
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: var(--color-secondary);
+      overflow: hidden;
+    }
+
+    .spec-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 32px;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .spec-head {
+      background: #f5f5f5;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--color-gray-dark);
+      padding: 8px;
+    }
+
+    .spec-row input {
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      background: #fafafa;
+      outline: none;
+      transition: border-color 150ms ease-out, background 150ms ease-out;
+    }
+
+    .spec-row input:focus {
+      border-color: var(--color-accent);
+      background: var(--color-secondary);
+    }
+
+    .spec-remove {
+      width: 26px;
+      height: 26px;
+      border: 0;
+      border-radius: 50%;
+      background: none;
+      color: var(--color-gray-dark);
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+
+    .spec-remove:hover {
+      background: #ffe9e7;
+      color: #c0261a;
+    }
+
+    .spec-add {
+      width: 100%;
+      border-radius: 0;
+      font-size: 12px;
+    }
+
     .seo-cards {
       display: flex;
       flex-wrap: wrap;
@@ -709,9 +775,17 @@
 
         <div class="form-group">
           <label>Характеристики</label>
-          <textarea id="product-specifications" rows="5"
-            placeholder="Диаметр: 8 мм&#10;Температура: -20...+80 °C&#10;Материал: латунь"></textarea>
-          <small class="text-muted">По одной на строку, в виде «параметр: значение»</small>
+          <div class="spec-editor">
+            <div class="spec-row spec-head">
+              <span>Параметр</span>
+              <span>Значение</span>
+              <span></span>
+            </div>
+            <div id="spec-rows"></div>
+            <button type="button" class="btn btn-ghost spec-add" onclick="addSpecRow()">
+              + ДОБАВИТЬ СТРОКУ
+            </button>
+          </div>
         </div>
 
         <div class="form-group">
@@ -1165,9 +1239,64 @@
       currentProductId = null;
       el('#product-modal-title').textContent = 'ДОБАВИТЬ ТОВАР';
       el('#product-form').reset();
+      renderSpecRows([]);
       resetPendingMedia();
       renderMedia(null);
       el('#product-modal').classList.add('active');
+    }
+
+    function renderSpecRows(specifications) {
+      const rows = el('#spec-rows');
+      clear(rows);
+
+      (specifications || []).forEach(spec => addSpecRow(spec.name, spec.value));
+      if (rows.children.length === 0) {
+        addSpecRow();
+      }
+    }
+
+    function addSpecRow(name = '', value = '') {
+      const row = document.createElement('div');
+      row.className = 'spec-row';
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'spec-name';
+      nameInput.placeholder = 'Диаметр';
+      nameInput.value = name;
+
+      const valueInput = document.createElement('input');
+      valueInput.type = 'text';
+      valueInput.className = 'spec-value';
+      valueInput.placeholder = '8 мм';
+      valueInput.value = value;
+
+      // Typing in the last row adds the next one, so nothing has to be clicked
+      valueInput.addEventListener('input', () => {
+        if (row === el('#spec-rows').lastElementChild && valueInput.value) addSpecRow();
+      });
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'spec-remove';
+      remove.textContent = '×';
+      remove.title = 'Удалить строку';
+      remove.onclick = () => {
+        row.remove();
+        if (el('#spec-rows').children.length === 0) addSpecRow();
+      };
+
+      row.append(nameInput, valueInput, remove);
+      el('#spec-rows').appendChild(row);
+    }
+
+    function collectSpecRows() {
+      return [...document.querySelectorAll('#spec-rows .spec-row')]
+        .map(row => ({
+          name: row.querySelector('.spec-name').value.trim(),
+          value: row.querySelector('.spec-value').value.trim()
+        }))
+        .filter(spec => spec.name && spec.value);
     }
 
     async function editProduct(id) {
@@ -1180,8 +1309,7 @@
         el('#product-sku').value = product.sku;
         el('#product-name').value = product.name;
         el('#product-description').value = product.description || '';
-        el('#product-specifications').value = (product.specifications || [])
-          .map(spec => `${spec.name}: ${spec.value}`).join('\n');
+        renderSpecRows(product.specifications);
         el('#product-category').value = product.category?.id || '';
         el('#product-brand').value = product.brand?.id || '';
         el('#product-price').value = product.price;
@@ -1646,7 +1774,7 @@
         sku: el('#product-sku').value,
         name: el('#product-name').value,
         description: el('#product-description').value,
-        specifications: el('#product-specifications').value,
+        specifications: collectSpecRows(),
         category_id: parseInt(el('#product-category').value),
         brand_id: el('#product-brand').value ? parseInt(el('#product-brand').value) : null,
         price: parseFloat(el('#product-price').value),

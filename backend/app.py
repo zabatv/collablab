@@ -652,10 +652,19 @@ SPEC_SEPARATORS = (':', '=', '—', '-')
 def format_specifications(specifications):
     return '\n'.join(f'{spec.name}: {spec.value}' for spec in specifications)
 
-def replace_specifications(product_id, text):
-    """Swap a product's specifications for the ones in the text. Does not commit."""
+def replace_specifications(product_id, source):
+    """Swap a product's specifications. Takes the text an Excel cell holds, or
+    the list of {name, value} the admin form sends. Does not commit."""
+    if isinstance(source, list):
+        pairs = [(str(item.get('name', '')).strip()[:100],
+                  str(item.get('value', '')).strip()[:255])
+                 for item in source if isinstance(item, dict)]
+        pairs = [(name, value) for name, value in pairs if name and value]
+    else:
+        pairs = parse_specifications(source)
+
     Specification.query.filter_by(product_id=product_id).delete()
-    for name, value in parse_specifications(text):
+    for name, value in pairs:
         db.session.add(Specification(product_id=product_id, name=name, value=value))
 
 def parse_specifications(text):
