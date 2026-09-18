@@ -1376,6 +1376,53 @@ footer {
   }
 }
 
+/* ===== MOTION (ported from React Bits) ===== */
+
+/* SpotlightCard: a soft light under the cursor, painted behind the text */
+.card {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(240px circle at var(--mouse-x) var(--mouse-y),
+    rgba(13, 94, 244, 0.1), transparent 70%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--settle) ease;
+  z-index: 0;
+}
+
+.card-image,
+.card-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* AnimatedContent: a block rises into place the first time it is scrolled to */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out);
+}
+
+.reveal.is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+/* ClickSpark draws on one canvas over everything, and catches nothing */
+.spark-canvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+}
+
 /* ===== TOASTS ===== */
 #notification-stack {
   position: fixed;
@@ -1429,6 +1476,11 @@ footer {
     border-color: var(--line-strong);
     box-shadow: var(--shadow-md);
     transform: translateY(-2px);
+  }
+
+  .card:hover::before,
+  .card:focus-within::before {
+    opacity: 1;
   }
 
   .card:hover .card-image img {

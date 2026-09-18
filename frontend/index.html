@@ -8,6 +8,7 @@
   <meta property="og:title" content="ROBOT — пневматика, фитинги и автоматика">
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314161a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230d5ef4'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -124,6 +125,7 @@
 
   <script src="js/api.js"></script>
   <script src="js/main.js"></script>
+  <script src="js/effects.js"></script>
   <script>
     const PRODUCTS_PER_CATEGORY = 4;
 
@@ -166,16 +168,19 @@
       const products = categories.reduce((sum, category) => sum + category.product_count, 0);
       const filled = categories.filter(category => category.product_count > 0).length;
 
+      // count: effects.js runs the number up when it scrolls into view
       const stats = [
-        [products.toLocaleString('ru-RU'), 'позиций в каталоге'],
-        [filled, 'категорий'],
-        ['24 ч', 'ответ на запрос'],
+        { count: products, label: 'позиций в каталоге' },
+        { count: filled, label: 'категорий' },
+        { text: '24 ч', label: 'ответ на запрос' },
       ];
 
-      host.innerHTML = stats.map(([value, label]) => `
+      host.innerHTML = stats.map(stat => `
         <div>
-          <div class="hero-stat-value">${value}</div>
-          <div class="hero-stat-label">${label}</div>
+          <div class="hero-stat-value"${stat.count === undefined ? '' : ` data-count-to="${stat.count}"`}>
+            ${stat.text ?? stat.count.toLocaleString('ru-RU')}
+          </div>
+          <div class="hero-stat-label">${stat.label}</div>
         </div>
       `).join('');
     }
@@ -184,7 +189,7 @@
       if (products.length === 0) return;
 
       const section = document.createElement('section');
-      section.className = 'category-section';
+      section.className = 'category-section reveal';
 
       const header = document.createElement('div');
       header.className = 'category-section-header';
