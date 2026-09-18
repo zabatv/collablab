@@ -325,34 +325,34 @@ header {
 }
 
 .logo {
+  /* The arm takes the top of the mark, so the letters are about half of this */
+  --logo-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  line-height: 1;
+  color: var(--ink);
   font-size: clamp(24px, 3vw, 32px);
   font-weight: 800;
   letter-spacing: -0.045em;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
   white-space: nowrap;
-  color: var(--ink);
+  flex: none;
+}
+
+.logo img {
+  height: var(--logo-height);
+  width: auto;
+  /* Drawn as one mark; nothing is added beside it */
+  display: block;
 }
 
 .logo span {
   cursor: pointer;
 }
 
-/* A full stop in the accent colour: a wordmark needs one thing that is not type */
-.logo::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  margin-bottom: 0.12em;
-}
-
-.logo img {
-  width: 36px;
-  height: 36px;
+/* The mark is black line art, so a dark ground needs it the other way round */
+.logo-inverted img {
+  filter: brightness(0) invert(1);
 }
 
 .header-nav {
@@ -1312,6 +1312,11 @@ footer {
   margin-bottom: var(--space-lg);
 }
 
+.footer-section .logo {
+  --logo-height: 46px;
+  margin-bottom: var(--space-xs);
+}
+
 .footer-section h4 {
   font-size: var(--text-2xs);
   font-weight: 650;
@@ -1850,6 +1855,10 @@ footer {
   .header-main {
     padding: var(--space-xs) 0;
     gap: var(--space-xs);
+  }
+
+  .logo {
+    --logo-height: 40px;
   }
 
   /* On a phone the strip has room for the phone number and nothing else */
