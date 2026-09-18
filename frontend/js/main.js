@@ -37,30 +37,74 @@ const NO_IMAGE = 'data:image/svg+xml,' + encodeURIComponent(
   'text-anchor="middle" letter-spacing="1">НЕТ ФОТО</text></svg>'
 );
 
-// Product Card Template
+// Names reach the page from the supplier's file, so nothing goes into the
+// markup unescaped
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, character => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[character]));
+}
+
+// The supplier puts the parameters into the name: «Фитинг угловой, 8мм x 8мм,
+// T=(0...+60)°C». The first clause says what it is, the rest tells two
+// near-identical parts apart — so they get different weight on the card.
+function splitName(name) {
+  const text = String(name || '').replace(/\xa0/g, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/^\([^)]*\)\s*/, '');
+  const cut = text.indexOf(',');
+
+  if (cut < 10) return { title: text, specs: '' };
+  return { title: text.slice(0, cut), specs: text.slice(cut + 1).trim() };
+}
+
+function stockLabel(product) {
+  return product.in_stock
+    ? { className: 'in-stock', text: `В наличии: ${product.stock}` }
+    // A part that is ordered in is not an error state
+    : { className: 'out-of-stock', text: 'Под заказ' };
+}
+
+// Product Card Template — the whole card is the link, so no button repeats it
 function createProductCard(product) {
-  const discount = product.discount;
-  const stockClass = product.in_stock ? 'in-stock' : 'out-of-stock';
-  const stockText = product.in_stock ? `В наличии: ${product.stock}` : 'Нет в наличии';
+  const { title, specs } = splitName(product.name);
+  const stock = stockLabel(product);
 
   return `
-    <div class="card">
+    <a class="card" href="product.html?id=${product.id}">
       <div class="card-image">
-        <img src="${product.image || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">
-        ${discount ? `<div class="card-badge">-${discount}%</div>` : ''}
+        <img src="${escapeHtml(product.image || NO_IMAGE)}" alt="${escapeHtml(title)}"
+             loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
+        ${product.discount ? `<div class="card-badge">-${product.discount}%</div>` : ''}
       </div>
       <div class="card-content">
-        <div class="card-category">${product.category?.name || ''}</div>
-        <h4 class="card-title">${product.name}</h4>
-        <div class="card-price">
-          <span class="card-price-current">${formatPrice(product.price)}</span>
-          ${product.old_price ? `<span class="card-price-old">${formatPrice(product.old_price)}</span>` : ''}
+        <div class="card-sku">${escapeHtml(product.sku || '')}</div>
+        <div class="card-title">${escapeHtml(title)}</div>
+        <div class="card-specs">${escapeHtml(specs)}</div>
+        <div class="card-foot">
+          <div class="card-price">
+            <span class="card-price-current">${formatPrice(product.price)}</span>
+            ${product.old_price ? `<span class="card-price-old">${formatPrice(product.old_price)}</span>` : ''}
+          </div>
+          <span class="stock ${stock.className}">${stock.text}</span>
         </div>
-        <div class="card-stock ${stockClass}">${stockText}</div>
-        <a href="product.html?id=${product.id}" class="btn btn-primary" style="width: 100%;">ПОДРОБНЕЕ</a>
+      </div>
+    </a>
+  `;
+}
+
+// Placeholders hold the grid's shape while the request is in flight
+function renderSkeletons(container, count = 8) {
+  if (!container) return;
+  container.innerHTML = Array.from({ length: count }, () => `
+    <div class="skeleton-card">
+      <div class="skeleton-image"></div>
+      <div class="skeleton-body">
+        <div class="skeleton-line" style="width: 35%"></div>
+        <div class="skeleton-line" style="width: 90%"></div>
+        <div class="skeleton-line" style="width: 60%"></div>
       </div>
     </div>
-  `;
+  `).join('');
 }
 
 // The admin page checks its own session on load, so nothing to do here
@@ -73,39 +117,21 @@ function showNotification(message, type = 'success') {
   if (!stack) {
     stack = document.createElement('div');
     stack.id = 'notification-stack';
-    stack.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      left: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-      pointer-events: none;
-      z-index: 9999;
-    `;
     document.body.appendChild(stack);
   }
 
   const notification = document.createElement('div');
-  notification.style.cssText = `
-    max-width: min(420px, 100%);
-    padding: 14px 20px;
-    background: ${type === 'success' ? '#34c759' : '#ff3b30'};
-    color: white;
-    border-radius: 4px;
-    font-weight: 600;
-    line-height: 1.35;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
-    animation: slideIn 0.3s ease;
-  `;
+  notification.className = `toast toast-${type}`;
   notification.textContent = message;
   stack.appendChild(notification);
 
+  // Transitions, not keyframes: messages can arrive faster than one plays out,
+  // and a transition retargets from where it is instead of restarting
+  requestAnimationFrame(() => notification.classList.add('toast-shown'));
+
   setTimeout(() => {
-    notification.style.animation = 'slideOut 0.3s ease';
-    setTimeout(() => notification.remove(), 300);
+    notification.classList.remove('toast-shown');
+    setTimeout(() => notification.remove(), 200);
   }, type === 'error' ? 6000 : 3000);
 }
 
@@ -149,33 +175,6 @@ function clearSearch() {
   input.focus();
   if (searchClearHandler) searchClearHandler();
 }
-
-// Add styles for animations
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideIn {
-    from {
-      transform: translateX(400px);
-      opacity: 0;
-    }
-    to {
-      transform: translateX(0);
-      opacity: 1;
-    }
-  }
-
-  @keyframes slideOut {
-    from {
-      transform: translateX(0);
-      opacity: 1;
-    }
-    to {
-      transform: translateX(400px);
-      opacity: 0;
-    }
-  }
-`;
-document.head.appendChild(style);
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', initApp);

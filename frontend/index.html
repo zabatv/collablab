@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ROBOT - Магазин электроники</title>
+  <title>ROBOT — пневматика, фитинги и автоматика</title>
+  <meta name="description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада. Каталог с характеристиками, фотографиями и ценами.">
+  <meta property="og:title" content="ROBOT — пневматика, фитинги и автоматика">
+  <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
+  <meta property="og:type" content="website">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,8 +15,8 @@
   <header>
     <div class="header-top">
       <div class="container flex-between">
-        <span>Доставка по России • Гарантия качества</span>
-        <span>8 (800) 123-45-67</span>
+        <span>Доставка по России • Отгрузка со склада</span>
+        <a href="tel:+78001234567">8 (800) 123-45-67</a>
       </div>
     </div>
 
@@ -33,7 +37,7 @@
         </div>
 
         <div class="header-nav">
-          <div onclick="window.location.href='catalog.html'">КАТАЛОГ</div>
+          <div onclick="window.location.href='catalog.html'">Каталог</div>
         </div>
       </div>
     </div>
@@ -55,18 +59,24 @@
   <section class="hero">
     <div class="container">
       <div class="hero-content">
-        <h1>ТЕХНОЛОГИЯ БУДУЩЕГО</h1>
-        <p>Качественная электроника и гаджеты для вашей жизни. Более 1000 товаров от ведущих производителей.</p>
+        <h1>Пневматика и автоматика со склада</h1>
+        <p>
+          Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики.
+          У каждой позиции — характеристики, фотография и цена.
+        </p>
         <div class="hero-actions">
-          <button class="btn btn-primary btn-lg" onclick="window.location.href='catalog.html'">СМОТРЕТЬ КАТАЛОГ</button>
-          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('featured').scrollIntoView({behavior: 'smooth'})">ПО КАТЕГОРИЯМ</button>
+          <button class="btn btn-primary btn-lg" onclick="window.location.href='catalog.html'">Смотреть каталог</button>
+          <button class="btn btn-secondary btn-lg" onclick="document.getElementById('featured').scrollIntoView({behavior: 'smooth'})">По категориям</button>
         </div>
+
+        <!-- Filled from the catalogue itself, so it can never claim more than there is -->
+        <div class="hero-stats" id="hero-stats"></div>
       </div>
     </div>
   </section>
 
   <!-- Products by category -->
-  <div id="featured" class="container" style="padding: 48px 0;">
+  <div id="featured" class="container" style="padding-block: 48px;">
     <div id="category-sections"></div>
   </div>
 
@@ -75,32 +85,39 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
-          <h4>КОМПАНИЯ</h4>
+          <div class="logo" style="margin-bottom: 8px;"><span>ROBOT</span></div>
+          <p class="text-muted" style="max-width: 32ch;">
+            Пневматика, электроавтоматика и приборы контроля для промышленного оборудования.
+          </p>
+        </div>
+        <div class="footer-section">
+          <h4>Каталог</h4>
           <ul>
-            <li><a href="#">О нас</a></li>
-            <li><a href="#">Контакты</a></li>
-            <li><a href="#">Блог</a></li>
+            <li><a href="catalog.html">Все товары</a></li>
+            <li><a href="catalog.html">Фитинги</a></li>
+            <li><a href="catalog.html">Пневмоцилиндры</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>ПОКУПАТЕЛЮ</h4>
+          <h4>Покупателю</h4>
           <ul>
-            <li><a href="#">Каталог</a></li>
             <li><a href="#">Доставка</a></li>
+            <li><a href="#">Оплата</a></li>
             <li><a href="#">Возврат</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>КОНТАКТЫ</h4>
+          <h4>Контакты</h4>
           <ul>
-            <li>Телефон: 8 (800) 123-45-67</li>
-            <li>Email: info@robot.ru</li>
-            <li>Адрес: г. Москва</li>
+            <li><a href="tel:+78001234567">8 (800) 123-45-67</a></li>
+            <li><a href="mailto:info@robot.ru">info@robot.ru</a></li>
+            <li>г. Москва</li>
           </ul>
         </div>
       </div>
-      <div class="footer-bottom">
-        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      <div class="footer-bottom flex-between" style="flex-wrap: wrap; gap: 8px;">
+        <span>&copy; 2024 ROBOT</span>
+        <span>Цены не являются публичной офертой</span>
       </div>
     </div>
   </footer>
@@ -112,6 +129,8 @@
 
     async function loadContent() {
       const sections = el('#category-sections');
+      sections.innerHTML = '<div class="grid grid-4" id="first-skeleton"></div>';
+      renderSkeletons(el('#first-skeleton'), PRODUCTS_PER_CATEGORY);
 
       try {
         // Categories come straight from the database, so a category created by
@@ -120,6 +139,7 @@
         categories.sort((a, b) => b.product_count - a.product_count);
 
         renderCategoryBar(categories);
+        renderHeroStats(categories);
 
         const filled = categories.filter(category => category.product_count > 0);
         if (filled.length === 0) {
@@ -139,6 +159,25 @@
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
       }
+    }
+
+    function renderHeroStats(categories) {
+      const host = el('#hero-stats');
+      const products = categories.reduce((sum, category) => sum + category.product_count, 0);
+      const filled = categories.filter(category => category.product_count > 0).length;
+
+      const stats = [
+        [products.toLocaleString('ru-RU'), 'позиций в каталоге'],
+        [filled, 'категорий'],
+        ['24 ч', 'ответ на запрос'],
+      ];
+
+      host.innerHTML = stats.map(([value, label]) => `
+        <div>
+          <div class="hero-stat-value">${value}</div>
+          <div class="hero-stat-label">${label}</div>
+        </div>
+      `).join('');
     }
 
     function renderCategorySection(container, category, products) {

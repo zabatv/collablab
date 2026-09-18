@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Товар - ROBOT</title>
+  <title>Товар — ROBOT</title>
+  <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,8 +12,8 @@
   <header>
     <div class="header-top">
       <div class="container flex-between">
-        <span>Доставка по России • Гарантия качества</span>
-        <span>8 (800) 123-45-67</span>
+        <span>Доставка по России • Отгрузка со склада</span>
+        <a href="tel:+78001234567">8 (800) 123-45-67</a>
       </div>
     </div>
 
@@ -33,29 +34,34 @@
         </div>
 
         <div class="header-nav">
-          <div onclick="window.location.href='catalog.html'">КАТАЛОГ</div>
+          <div onclick="window.location.href='catalog.html'">Каталог</div>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Breadcrumb -->
-  <div class="container" style="padding: 16px 0;">
-    <div class="text-muted">
-      <a href="index.html">Главная</a> /
-      <a href="catalog.html">Каталог</a> /
-      <span id="breadcrumb-product">Товар</span>
-    </div>
+  <div class="container">
+    <nav class="breadcrumb" aria-label="Хлебные крошки">
+      <a href="index.html">Главная</a>
+      <span>/</span>
+      <a href="catalog.html">Каталог</a>
+      <span>/</span>
+      <span class="breadcrumb-current" id="breadcrumb-product">Товар</span>
+    </nav>
   </div>
 
   <!-- Product Details -->
-  <main class="container" id="product-container" style="padding: 32px 0;">
-    <div class="loading">Загрузка...</div>
+  <main class="container" id="product-container" style="padding-block: 8px 32px;">
+    <div class="loading">Загрузка…</div>
   </main>
 
   <!-- Related Products -->
-  <section class="container" style="padding: 48px 0; border-top: 1px solid var(--color-border);">
-    <h2 style="margin-bottom: 32px;">ПОХОЖИЕ ТОВАРЫ</h2>
+  <section class="container" style="padding-block: 32px 48px; border-top: 1px solid var(--line);">
+    <div class="section-head">
+      <h2>Похожие товары</h2>
+      <a class="category-section-link" id="related-all" href="catalog.html">Вся категория</a>
+    </div>
     <div id="related-products" class="grid grid-4"></div>
   </section>
 
@@ -64,32 +70,39 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
-          <h4>КОМПАНИЯ</h4>
+          <div class="logo" style="margin-bottom: 8px;"><span>ROBOT</span></div>
+          <p class="text-muted" style="max-width: 32ch;">
+            Пневматика, электроавтоматика и приборы контроля для промышленного оборудования.
+          </p>
+        </div>
+        <div class="footer-section">
+          <h4>Каталог</h4>
           <ul>
-            <li><a href="#">О нас</a></li>
-            <li><a href="#">Контакты</a></li>
-            <li><a href="#">Блог</a></li>
+            <li><a href="catalog.html">Все товары</a></li>
+            <li><a href="catalog.html">Фитинги</a></li>
+            <li><a href="catalog.html">Пневмоцилиндры</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>ПОКУПАТЕЛЮ</h4>
+          <h4>Покупателю</h4>
           <ul>
-            <li><a href="#">Каталог</a></li>
             <li><a href="#">Доставка</a></li>
+            <li><a href="#">Оплата</a></li>
             <li><a href="#">Возврат</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>КОНТАКТЫ</h4>
+          <h4>Контакты</h4>
           <ul>
-            <li>Телефон: 8 (800) 123-45-67</li>
-            <li>Email: info@robot.ru</li>
-            <li>Адрес: г. Москва</li>
+            <li><a href="tel:+78001234567">8 (800) 123-45-67</a></li>
+            <li><a href="mailto:info@robot.ru">info@robot.ru</a></li>
+            <li>г. Москва</li>
           </ul>
         </div>
       </div>
-      <div class="footer-bottom">
-        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      <div class="footer-bottom flex-between" style="flex-wrap: wrap; gap: 8px;">
+        <span>&copy; 2024 ROBOT</span>
+        <span>Цены не являются публичной офертой</span>
       </div>
     </div>
   </footer>
@@ -118,18 +131,19 @@
         fetch(`${API_BASE}/track/view/${productId}`, { method: 'POST' }).catch(() => {});
       } catch (error) {
         console.error('Error loading product:', error);
-        el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p><a href="catalog.html">Вернуться в каталог</a></p></div>';
+        el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p>Возможно, позицию сняли с продажи.</p><a class="btn btn-secondary" href="catalog.html">Вернуться в каталог</a></div>';
       }
     }
 
     function renderProduct() {
       const product = currentProduct;
-      const discount = product.discount;
-      const stockClass = product.in_stock ? 'in-stock' : 'out-of-stock';
-      const stockText = product.in_stock ? `В наличии: ${product.stock}` : 'Нет в наличии';
+      const { title, specs } = splitName(product.name);
+      const stock = stockLabel(product);
 
-      // Update breadcrumb
-      el('#breadcrumb-product').textContent = product.name;
+      // The tab and the search result read the short name, not the parameter list
+      document.title = `${title} — ROBOT`;
+      setMeta('description', (product.description || product.name).slice(0, 300));
+      el('#breadcrumb-product').textContent = title;
 
       // Get all images
       const allImages = [
@@ -143,48 +157,49 @@
           <!-- Gallery -->
           <div class="product-gallery">
             <div class="product-main-image">
-              <img id="main-image" src="${allImages[0]?.url || product.image || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">
+              <img id="main-image" src="${escapeHtml(allImages[0]?.url || product.image || NO_IMAGE)}"
+                   alt="${escapeHtml(title)}" onerror="this.onerror=null; this.src=NO_IMAGE">
             </div>
             <div class="product-thumbnails" id="thumbnails"></div>
           </div>
 
           <!-- Info -->
           <div class="product-info">
-            <h1>${product.name}</h1>
+            <div class="eyebrow">${escapeHtml(product.category?.name || 'Каталог')}</div>
+            <h1>${escapeHtml(title)}</h1>
+            ${specs ? `<p class="product-fullname">${escapeHtml(specs)}</p>` : ''}
 
             <div class="product-meta">
               <div class="product-meta-item">
-                <div class="product-meta-label">SKU</div>
-                <div class="product-meta-value">${product.sku}</div>
+                <div class="product-meta-label">Артикул</div>
+                <div class="product-meta-value num">${escapeHtml(product.sku)}</div>
               </div>
-              <div class="product-meta-item">
-                <div class="product-meta-label">Бренд</div>
-                <div class="product-meta-value">${product.brand?.name || 'N/A'}</div>
-              </div>
+              ${product.brand?.name ? `
+                <div class="product-meta-item">
+                  <div class="product-meta-label">Бренд</div>
+                  <div class="product-meta-value">${escapeHtml(product.brand.name)}</div>
+                </div>` : ''}
               <div class="product-meta-item">
                 <div class="product-meta-label">Категория</div>
-                <div class="product-meta-value">${product.category?.name || 'N/A'}</div>
+                <div class="product-meta-value">${escapeHtml(product.category?.name || '—')}</div>
               </div>
             </div>
 
-            <div class="product-price">
-              ${formatPrice(product.price)}
-              ${product.old_price ? `<span class="product-price-old">${formatPrice(product.old_price)}</span>` : ''}
+            <div class="product-buy">
+              <div class="product-price">
+                ${formatPrice(product.price)}
+                ${product.old_price ? `<span class="product-price-old">${formatPrice(product.old_price)}</span>` : ''}
+              </div>
+              <span class="stock ${stock.className}">${stock.text}</span>
             </div>
 
-            <div class="product-stock ${stockClass}">${stockText}</div>
-
             <div class="product-actions">
-              <button class="btn btn-primary btn-lg" onclick="callStore()" ${!product.in_stock ? 'disabled' : ''}>
-                СВЯЗАТЬСЯ С МАГАЗИНОМ
-              </button>
+              <button class="btn btn-accent btn-lg" onclick="callStore()">Запросить цену и срок</button>
+              <a class="btn btn-secondary btn-lg" href="tel:+78001234567">Позвонить</a>
             </div>
 
             ${product.description ? `
-              <div style="margin-bottom: 24px; padding: 16px; background: var(--color-gray); border-radius: 4px;">
-                <h4 style="margin-top: 0;">Описание</h4>
-                <p>${product.description}</p>
-              </div>
+              <p class="product-description">${escapeHtml(product.description)}</p>
             ` : ''}
           </div>
         </div>
@@ -194,12 +209,12 @@
       if (product.specifications && product.specifications.length > 0) {
         html += `
           <div class="specifications">
-            <h3>ХАРАКТЕРИСТИКИ</h3>
+            <h3>Характеристики</h3>
             <table class="spec-table">
               ${product.specifications.map(spec => `
                 <tr>
-                  <td>${spec.name}</td>
-                  <td>${spec.value}</td>
+                  <td>${escapeHtml(spec.name)}</td>
+                  <td>${escapeHtml(spec.value)}</td>
                 </tr>
               `).join('')}
             </table>
@@ -216,13 +231,29 @@
       // Render thumbnails
       const thumbnailsDiv = el('#thumbnails');
       clear(thumbnailsDiv);
+      // A single photo needs no row of one thumbnail under it
+      if (allImages.length < 2) return;
+
       allImages.forEach((img, index) => {
-        const thumb = document.createElement('div');
+        const thumb = document.createElement('button');
+        thumb.type = 'button';
         thumb.className = 'product-thumbnail' + (index === 0 ? ' active' : '');
-        thumb.innerHTML = `<img src="${img.url || NO_IMAGE}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">`;
+        thumb.setAttribute('aria-label', `Фото ${index + 1}`);
+        thumb.innerHTML = `<img src="${escapeHtml(img.url || NO_IMAGE)}" alt="" onerror="this.onerror=null; this.src=NO_IMAGE">`;
         thumb.onclick = () => selectImage(index);
         thumbnailsDiv.appendChild(thumb);
       });
+    }
+
+    // Search engines read the description of the page they land on
+    function setMeta(name, content) {
+      let tag = document.querySelector(`meta[name="${name}"]`);
+      if (!tag) {
+        tag = document.createElement('meta');
+        tag.name = name;
+        document.head.appendChild(tag);
+      }
+      tag.content = content;
     }
 
     // Builds a player for a video URL, or null when the link is not playable inline
@@ -258,7 +289,7 @@
       if (playable.length === 0) return;
 
       const heading = document.createElement('h3');
-      heading.textContent = 'ВИДЕО';
+      heading.textContent = 'Видео';
       section.appendChild(heading);
 
       const grid = document.createElement('div');
@@ -318,27 +349,26 @@
         const product = currentProduct;
         if (!product.category?.id) return;
 
+        el('#related-all').href = `catalog.html?category=${product.category.id}`;
+
         const data = await ProductAPI.getProducts({
           category_id: product.category.id,
-          per_page: 4
+          per_page: 6
         });
 
         const grid = el('#related-products');
-        clear(grid);
-
-        data.products
+        grid.innerHTML = data.products
           .filter(p => p.id !== product.id)
           .slice(0, 4)
-          .forEach(p => {
-            grid.innerHTML += createProductCard(p);
-          });
+          .map(createProductCard)
+          .join('');
       } catch (error) {
         console.error('Error loading related products:', error);
       }
     }
 
     function callStore() {
-      showNotification('Запрос отправлен. Наш менеджер свяжется с вами в ближайшее время!', 'success');
+      showNotification('Запрос отправлен — менеджер ответит в течение рабочего дня.', 'success');
     }
 
     async function handleSearch() {

@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Каталог - ROBOT</title>
+  <title>Каталог пневматики и автоматики — ROBOT</title>
+  <meta name="description" content="299 позиций: фитинги, пневмоцилиндры, распределители, клапаны, реле, датчики. Фильтр по категориям и брендам, цены и характеристики.">
+  <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
+  <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -11,8 +14,8 @@
   <header>
     <div class="header-top">
       <div class="container flex-between">
-        <span>Доставка по России • Гарантия качества</span>
-        <span>8 (800) 123-45-67</span>
+        <span>Доставка по России • Отгрузка со склада</span>
+        <a href="tel:+78001234567">8 (800) 123-45-67</a>
       </div>
     </div>
 
@@ -33,63 +36,68 @@
         </div>
 
         <div class="header-nav">
-          <div onclick="window.location.href='catalog.html'" style="border-bottom-color: var(--color-accent);">КАТАЛОГ</div>
+          <div onclick="window.location.href='catalog.html'" style="border-bottom-color: var(--color-accent);">Каталог</div>
         </div>
       </div>
     </div>
   </header>
 
   <!-- Main Content -->
-  <main class="container" style="padding: 32px 0;">
-    <h1 style="margin-bottom: 32px;">КАТАЛОГ ТОВАРОВ</h1>
+  <main class="container" style="padding-block: 24px 8px;">
+    <h1 style="margin-bottom: 20px;">Каталог</h1>
 
-    <div style="display: grid; grid-template-columns: 250px 1fr; gap: 32px;">
+    <div class="catalog-layout">
 
       <!-- Filters -->
-      <aside>
+      <aside class="catalog-aside" id="catalog-aside">
+        <button type="button" class="btn btn-secondary filters-toggle" onclick="toggleFilters()">
+          <span>Фильтры</span>
+          <span id="filters-toggle-state">показать</span>
+        </button>
+
         <div class="filters">
 
           <!-- Sort -->
           <div class="filter-group">
-            <h4>СОРТИРОВКА</h4>
-            <select id="sort-select" onchange="applyFilters()" style="width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 4px;">
+            <h4>Сортировка</h4>
+            <select id="sort-select" class="filter-select" onchange="applyFilters()">
               <option value="newest">Новые</option>
               <option value="name">По названию</option>
-              <option value="price_asc">Цена: низкая</option>
-              <option value="price_desc">Цена: высокая</option>
+              <option value="price_asc">Цена: по возрастанию</option>
+              <option value="price_desc">Цена: по убыванию</option>
             </select>
           </div>
 
           <!-- Categories -->
           <div class="filter-group">
-            <h4>КАТЕГОРИИ</h4>
+            <h4>Категории</h4>
             <div class="filter-options" id="categories-filter"></div>
           </div>
 
-          <!-- Brands -->
-          <div class="filter-group">
-            <h4>БРЕНДЫ</h4>
+          <!-- Brands: hidden until the catalogue actually has brands -->
+          <div class="filter-group" id="brands-group" style="display: none;">
+            <h4>Бренды</h4>
             <div class="filter-options" id="brands-filter"></div>
           </div>
 
-          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%; margin-top: 24px;">ОЧИСТИТЬ ФИЛЬТРЫ</button>
+          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%;">Очистить фильтры</button>
         </div>
       </aside>
 
       <!-- Products -->
       <section>
-        <!-- Results Info -->
-        <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--color-border);">
+        <div class="catalog-toolbar">
           <p class="text-muted">
-            Найдено: <strong id="results-count">0</strong> товаров
+            Найдено: <strong class="num" id="results-count">0</strong>
           </p>
+          <p class="text-muted" id="active-filter"></p>
         </div>
 
         <!-- Products Grid -->
         <div id="products-grid" class="grid grid-3"></div>
 
         <!-- Pagination -->
-        <div class="pagination" id="pagination" style="margin-top: 48px;"></div>
+        <div class="pagination" id="pagination"></div>
       </section>
     </div>
   </main>
@@ -99,32 +107,39 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
-          <h4>КОМПАНИЯ</h4>
+          <div class="logo" style="margin-bottom: 8px;"><span>ROBOT</span></div>
+          <p class="text-muted" style="max-width: 32ch;">
+            Пневматика, электроавтоматика и приборы контроля для промышленного оборудования.
+          </p>
+        </div>
+        <div class="footer-section">
+          <h4>Каталог</h4>
           <ul>
-            <li><a href="#">О нас</a></li>
-            <li><a href="#">Контакты</a></li>
-            <li><a href="#">Блог</a></li>
+            <li><a href="catalog.html">Все товары</a></li>
+            <li><a href="catalog.html">Фитинги</a></li>
+            <li><a href="catalog.html">Пневмоцилиндры</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>ПОКУПАТЕЛЮ</h4>
+          <h4>Покупателю</h4>
           <ul>
-            <li><a href="#">Каталог</a></li>
             <li><a href="#">Доставка</a></li>
+            <li><a href="#">Оплата</a></li>
             <li><a href="#">Возврат</a></li>
           </ul>
         </div>
         <div class="footer-section">
-          <h4>КОНТАКТЫ</h4>
+          <h4>Контакты</h4>
           <ul>
-            <li>Телефон: 8 (800) 123-45-67</li>
-            <li>Email: info@robot.ru</li>
-            <li>Адрес: г. Москва</li>
+            <li><a href="tel:+78001234567">8 (800) 123-45-67</a></li>
+            <li><a href="mailto:info@robot.ru">info@robot.ru</a></li>
+            <li>г. Москва</li>
           </ul>
         </div>
       </div>
-      <div class="footer-bottom">
-        <p>&copy; 2024 ROBOT. Все права защищены.</p>
+      <div class="footer-bottom flex-between" style="flex-wrap: wrap; gap: 8px;">
+        <span>&copy; 2024 ROBOT</span>
+        <span>Цены не являются публичной офертой</span>
       </div>
     </div>
   </footer>
@@ -146,7 +161,8 @@
           categoriesFilter.innerHTML += `
             <div class="filter-option">
               <input type="checkbox" id="cat-${category.id}" value="${category.id}" onchange="applyFilters()">
-              <label for="cat-${category.id}">${category.name} (${category.product_count})</label>
+              <label for="cat-${category.id}">${escapeHtml(category.name)}</label>
+              <span class="filter-count">${category.product_count}</span>
             </div>
           `;
         });
@@ -155,12 +171,13 @@
         const brands = await ProductAPI.getBrands();
         const brandsFilter = el('#brands-filter');
         clear(brandsFilter);
+        el('#brands-group').style.display = brands.length ? '' : 'none';
 
         brands.forEach(brand => {
           brandsFilter.innerHTML += `
             <div class="filter-option">
               <input type="checkbox" id="brand-${brand.id}" value="${brand.id}" onchange="applyFilters()">
-              <label for="brand-${brand.id}">${brand.name}</label>
+              <label for="brand-${brand.id}">${escapeHtml(brand.name)}</label>
             </div>
           `;
         });
@@ -186,7 +203,7 @@
       currentFilters = {
         sort: sort,
         page: currentPage,
-        per_page: 12
+        per_page: 24
       };
 
       // The input holds the search term, so picking a filter cannot drop it
@@ -206,26 +223,55 @@
     }
 
     async function loadProducts() {
+      const grid = el('#products-grid');
+      renderSkeletons(grid, currentFilters.per_page || 12);
+
       try {
         const data = await ProductAPI.getProducts(currentFilters);
-        const grid = el('#products-grid');
-        clear(grid);
 
-        el('#results-count').textContent = data.total;
+        el('#results-count').textContent = data.total.toLocaleString('ru-RU');
+        describeActiveFilter();
 
         if (data.products.length > 0) {
-          data.products.forEach(product => {
-            grid.innerHTML += createProductCard(product);
-          });
+          grid.innerHTML = data.products.map(createProductCard).join('');
         } else {
-          grid.innerHTML = '<div class="empty-state" style="grid-column: 1/-1;"><p>Товары не найдены</p></div>';
+          grid.innerHTML = `
+            <div class="empty-state" style="grid-column: 1/-1;">
+              <h2>Ничего не найдено</h2>
+              <p>Попробуйте другой запрос или снимите фильтры.</p>
+              <button class="btn btn-secondary" onclick="resetFilters()">Очистить фильтры</button>
+            </div>`;
         }
 
         // Render pagination
         renderPagination(data.pages, data.current_page);
       } catch (error) {
         console.error('Error loading products:', error);
+        grid.innerHTML = `
+          <div class="empty-state" style="grid-column: 1/-1;">
+            <h2>Каталог не отвечает</h2>
+            <p>Не удалось связаться с сервером. Обновите страницу через минуту.</p>
+          </div>`;
       }
+    }
+
+    // Says out loud what the list is currently narrowed to
+    function describeActiveFilter() {
+      const parts = [];
+      const query = el('#search-input').value.trim();
+      if (query.length >= 2) parts.push(`запрос «${query}»`);
+
+      elAll('#categories-filter input:checked').forEach(input => {
+        parts.push(input.nextElementSibling.textContent);
+      });
+
+      el('#active-filter').textContent = parts.length ? parts.join(' · ') : '';
+    }
+
+    function toggleFilters() {
+      const aside = el('#catalog-aside');
+      const open = aside.classList.toggle('open');
+      el('#filters-toggle-state').textContent = open ? 'скрыть' : 'показать';
     }
 
     function renderPagination(totalPages, currentPage) {
@@ -237,7 +283,7 @@
       // Previous button
       if (currentPage > 1) {
         const prev = document.createElement('button');
-        prev.textContent = '← ПРЕДЫДУЩАЯ';
+        prev.textContent = '← Назад';
         prev.onclick = () => goToPage(currentPage - 1);
         paginationDiv.appendChild(prev);
       }
@@ -254,7 +300,7 @@
       // Next button
       if (currentPage < totalPages) {
         const next = document.createElement('button');
-        next.textContent = 'СЛЕДУЮЩАЯ →';
+        next.textContent = 'Вперёд →';
         next.onclick = () => goToPage(currentPage + 1);
         paginationDiv.appendChild(next);
       }

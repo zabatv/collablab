@@ -1,5 +1,9 @@
 // API Helper Functions
-const API_BASE = 'http://45.143.93.41:5000/api';
+// Opened from a developer's own machine the backend is next door on port 5000;
+// everywhere else it is the server the site is published on
+const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ? `${window.location.protocol}//${window.location.hostname}:5000/api`
+  : 'http://45.143.93.41:5000/api';
 
 // The browser holds a session token, never the password
 const TOKEN_KEY = 'admin_token';
