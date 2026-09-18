@@ -169,7 +169,8 @@
 
   function spark(event) {
     // Only where something was actually pressed — not on every click on the page
-    const target = event.target.closest('.btn, .search-submit, .pagination button, .filters-toggle');
+    const target = event.target.closest(
+      '.btn, .search-submit, .pagination button, .filters-toggle, .login-submit');
     if (!target) return;
 
     if (!canvas) {
