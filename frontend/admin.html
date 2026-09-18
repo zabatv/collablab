@@ -2,13 +2,15 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
     .admin-layout {
       display: grid;
-      grid-template-columns: 200px 1fr;
+      grid-template-columns: 200px minmax(0, 1fr);
       min-height: 100vh;
       gap: 0;
     }
@@ -31,8 +33,10 @@
       border-left-color: transparent;
     }
 
-    .admin-sidebar .nav-item:hover {
-      background: #e8e8e8;
+    @media (hover: hover) and (pointer: fine) {
+      .admin-sidebar .nav-item:hover {
+        background: #e8e8e8;
+      }
     }
 
     .admin-sidebar .nav-item.active {
@@ -87,8 +91,10 @@
       color: var(--color-gray-dark);
     }
 
-    .admin-table tbody tr:hover {
-      background: #f9f9f9;
+    @media (hover: hover) and (pointer: fine) {
+      .admin-table tbody tr:hover {
+        background: #f9f9f9;
+      }
     }
 
     .table-thumb {
@@ -138,10 +144,16 @@
       transition: border-color 0.15s, background 0.15s;
     }
 
-    .upload-drop:hover,
     .upload-drop.dragover {
       border-color: var(--color-accent);
       background: #f0f6ff;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .upload-drop:hover {
+        border-color: var(--color-accent);
+        background: #f0f6ff;
+      }
     }
 
     .upload-drop-title {
@@ -223,8 +235,10 @@
       cursor: pointer;
     }
 
-    .thumb-remove:hover {
-      background: #000;
+    @media (hover: hover) and (pointer: fine) {
+      .thumb-remove:hover {
+        background: #000;
+      }
     }
 
     .video-preview-grid {
@@ -367,9 +381,11 @@
       transition: background-color 150ms ease, color 150ms ease;
     }
 
-    .spec-remove:hover {
-      background: #ffe9e7;
-      color: #c0261a;
+    @media (hover: hover) and (pointer: fine) {
+      .spec-remove:hover {
+        background: #ffe9e7;
+        color: #c0261a;
+      }
     }
 
     .spec-add {
@@ -437,8 +453,10 @@
       cursor: pointer;
     }
 
-    .seo-issue-head:hover {
-      background: #fafafa;
+    @media (hover: hover) and (pointer: fine) {
+      .seo-issue-head:hover {
+        background: #fafafa;
+      }
     }
 
     .seo-issue-title {
@@ -491,9 +509,11 @@
       cursor: pointer;
     }
 
-    .seo-product:hover {
-      background: #f0f6ff;
-      color: var(--color-accent);
+    @media (hover: hover) and (pointer: fine) {
+      .seo-product:hover {
+        background: #f0f6ff;
+        color: var(--color-accent);
+      }
     }
 
     .seo-product-sku {
@@ -628,8 +648,10 @@
       color: var(--color-gray-dark);
     }
 
-    .modal-close:hover {
-      color: var(--color-primary);
+    @media (hover: hover) and (pointer: fine) {
+      .modal-close:hover {
+        color: var(--color-primary);
+      }
     }
 
     .table-actions {
@@ -647,6 +669,205 @@
       bottom: 24px;
       left: 24px;
       right: 24px;
+    }
+
+    /* ===== PHONE =====
+       The panel was desktop-only: a fixed sidebar beside a seven-column table.
+       On a phone that widened the layout viewport until the whole page was
+       zoomed out to fit, so nothing was readable and nothing was tappable. */
+    @media (max-width: 860px) {
+      .admin-layout {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 100dvh;
+      }
+
+      /* The sidebar becomes a bar across the top, its tabs scrolling sideways */
+      .admin-sidebar {
+        height: auto;
+        padding: 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+        padding-top: env(safe-area-inset-top);
+        z-index: 60;
+      }
+
+      .admin-sidebar > div:first-child {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 16px !important;
+        margin-bottom: 0 !important;
+      }
+
+      .admin-sidebar > div:first-child .text-muted {
+        display: none;
+      }
+
+      .admin-sidebar nav {
+        /* Beats the inline position: relative, so the sign-out button below
+           anchors to the bar itself instead of landing on top of the tabs */
+        position: static !important;
+        height: auto !important;
+        display: flex;
+        align-items: stretch;
+        gap: 4px;
+        padding: 0 8px;
+        /* Room for the sign-out button, which floats over the right edge */
+        padding-right: 104px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+      }
+
+      .admin-sidebar nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      .admin-sidebar .nav-item {
+        white-space: nowrap;
+        padding: 12px 14px;
+        min-height: 46px;
+        display: flex;
+        align-items: center;
+        border-left: 0;
+        border-bottom: 2px solid transparent;
+      }
+
+      .admin-sidebar .nav-item.active {
+        border-bottom-color: var(--accent);
+      }
+
+      /* Sign out belongs beside the title once the sidebar has no bottom,
+         not at the head of the tab strip */
+      .logout-btn {
+        position: absolute;
+        top: calc(6px + env(safe-area-inset-top));
+        right: 12px;
+        bottom: auto;
+        left: auto;
+        width: auto !important;
+        min-height: 40px;
+      }
+
+      .admin-content {
+        padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+      }
+
+      .admin-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+      }
+
+      .admin-header h1 {
+        font-size: 22px;
+      }
+
+      .admin-header > div {
+        flex-wrap: wrap;
+      }
+
+      .admin-header .btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+        justify-content: center;
+      }
+
+      /* Each row becomes a card: the header cells cannot fit across a phone,
+         so every cell carries its own label instead */
+      .admin-table,
+      .admin-table table,
+      .admin-table tbody,
+      .admin-table tr,
+      .admin-table td {
+        display: block;
+        width: 100%;
+      }
+
+      .admin-table thead {
+        display: none;
+      }
+
+      .admin-table tr {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        margin-bottom: 12px;
+        padding: 12px;
+        background: var(--surface);
+      }
+
+      .admin-table td {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 12px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 0;
+        word-break: break-word;
+      }
+
+      .admin-table td::before {
+        content: attr(data-label);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+      }
+
+      .admin-table td[data-label=""]::before {
+        content: "";
+      }
+
+      .table-actions {
+        gap: 8px;
+      }
+
+      .table-actions button {
+        flex: 1;
+        min-height: 44px;
+        border: 1px solid var(--line);
+      }
+
+      /* A dialog on a phone is a sheet: it comes up from the bottom edge and
+         keeps its own scroll instead of dragging the page behind it */
+      .modal {
+        align-items: flex-end;
+      }
+
+      .modal-content {
+        width: 100%;
+        max-width: none;
+        max-height: 92dvh;
+        padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+        border-radius: 16px 16px 0 0;
+        overscroll-behavior: contain;
+      }
+
+      .modal-close {
+        font-size: 30px;
+        line-height: 1;
+        padding: 4px 8px;
+        margin: -4px -8px 0 0;
+      }
+
+      .admin-form input,
+      .admin-form textarea,
+      .admin-form select,
+      .spec-row input,
+      .upload-url-row input {
+        font-size: 16px;
+      }
+
+      .spec-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+      }
+
+      .seo-cards {
+        gap: 8px;
+      }
     }
   </style>
 </head>
@@ -1157,17 +1378,17 @@
         data.products.forEach(product => {
           tbody.innerHTML += `
             <tr>
-              <td>
+              <td data-label="Фото">
                 ${product.image
                   ? `<img src="${product.image}" alt="" class="table-thumb" onclick="openImagePreview('${product.image}')">`
                   : '<span class="table-thumb table-thumb-empty">нет фото</span>'}
               </td>
-              <td>${product.sku}</td>
-              <td>${product.name}</td>
-              <td>${product.category?.name || '-'}</td>
-              <td>${formatPrice(product.price)}</td>
-              <td>${product.stock}</td>
-              <td>
+              <td data-label="Артикул">${product.sku}</td>
+              <td data-label="Название">${product.name}</td>
+              <td data-label="Категория">${product.category?.name || '-'}</td>
+              <td data-label="Цена">${formatPrice(product.price)}</td>
+              <td data-label="Остаток">${product.stock}</td>
+              <td data-label="">
                 <div class="table-actions">
                   <button class="btn btn-ghost" onclick="editProduct(${product.id})">Редак.</button>
                   <button class="btn btn-ghost" onclick="deleteProduct(${product.id})">Удалить</button>

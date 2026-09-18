@@ -104,7 +104,10 @@
 }
 
 html {
+  /* No font inflation in landscape, and no grey flash over whatever is tapped —
+     the press feedback below replaces it */
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;
 }
 
@@ -141,6 +144,36 @@ button {
   background: none;
   border: none;
   cursor: pointer;
+}
+
+/* ===== TOUCH BASELINE =====
+   A phone is not a narrow desktop: it has no hover, a double-tap gesture the
+   browser waits for, a long-press that selects text, and a keyboard that
+   zooms the page into small inputs. Each line below removes one of those. */
+
+/* Never waits to see whether a second tap is coming, so the tap fires at once */
+button,
+a,
+[role="button"],
+label,
+summary,
+.card,
+.nav-item,
+.filter-option {
+  touch-action: manipulation;
+}
+
+/* A control's label is not text to copy — a long press must not select it.
+   Never on body copy: article numbers and errors are there to be copied. */
+button,
+[role="button"],
+.category-bar-item,
+.nav-item,
+.pagination button,
+.eyebrow {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* One visible ring for keyboard users, never for the mouse */
@@ -215,7 +248,9 @@ h4 {
   width: 100%;
   max-width: var(--page);
   margin: 0 auto;
-  padding: 0 var(--gutter);
+  /* The gutter, or the notch in landscape, whichever is larger */
+  padding-left: max(var(--gutter), env(safe-area-inset-left));
+  padding-right: max(var(--gutter), env(safe-area-inset-right));
 }
 
 .flex {
@@ -272,7 +307,7 @@ header {
 .header-top {
   background: var(--ink);
   color: rgba(255, 255, 255, 0.72);
-  padding: var(--space-xs) 0;
+  padding: calc(var(--space-xs) + env(safe-area-inset-top)) 0 var(--space-xs);
   font-size: var(--text-xs);
   letter-spacing: 0.01em;
 }
@@ -351,6 +386,7 @@ header {
   align-items: stretch;
   gap: var(--space-2xs);
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
@@ -411,6 +447,7 @@ header {
   min-width: 260px;
   max-height: 60vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--surface-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -1264,7 +1301,7 @@ header {
 footer {
   background: var(--surface-sunken);
   border-top: 1px solid var(--line);
-  padding: var(--space-2xl) 0 var(--space-lg);
+  padding: var(--space-2xl) 0 calc(var(--space-lg) + env(safe-area-inset-bottom));
   margin-top: var(--space-2xl);
 }
 
@@ -1426,9 +1463,9 @@ footer {
 /* ===== TOASTS ===== */
 #notification-stack {
   position: fixed;
-  top: var(--space-md);
-  right: var(--space-md);
-  left: var(--space-md);
+  top: calc(var(--space-md) + env(safe-area-inset-top));
+  right: max(var(--space-md), env(safe-area-inset-right));
+  left: max(var(--space-md), env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -1548,6 +1585,79 @@ footer {
 
   .category-section-link:hover {
     text-decoration: underline;
+  }
+}
+
+/* ===== TOUCH TARGETS =====
+   A finger is about 9 mm wide. These grow only where the pointer is coarse,
+   so the desktop layout keeps its density. */
+@media (pointer: coarse) {
+  /* Under 16px Android and iOS zoom the page in on focus and never zoom back */
+  input,
+  textarea,
+  select,
+  .search-bar input,
+  .filter-select,
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    font-size: 16px;
+  }
+
+  .search-bar {
+    height: 46px;
+  }
+
+  /* The strip's phone number is the one thing on it worth tapping */
+  .header-top a {
+    display: inline-block;
+    padding: 6px 0;
+  }
+
+  .category-section-link {
+    display: inline-block;
+    padding: 10px 0;
+  }
+
+  .pagination button {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .category-bar-item {
+    min-height: 46px;
+  }
+
+  .category-bar-dropdown-item {
+    min-height: 44px;
+  }
+
+  .filter-option {
+    min-height: 40px;
+  }
+
+  .filter-option input {
+    width: 18px;
+    height: 18px;
+  }
+
+  .search-clear {
+    width: 32px;
+    height: 32px;
+  }
+
+  .footer-section ul li {
+    margin-bottom: var(--space-2xs);
+  }
+
+  .footer-section ul li a {
+    display: inline-block;
+    padding: 10px 0;
+  }
+
+  .breadcrumb a {
+    display: inline-block;
+    padding: 8px 0;
   }
 }
 
