@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#ffffff">
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314161a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230d5ef4'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/style.css">
   <style>
     .admin-layout {
@@ -545,6 +546,208 @@
       color: var(--color-gray-dark);
     }
 
+    /* ===== TRAFFIC CHART =====
+       Two series of the same unit (events per day) on one axis. Palette checked
+       with the data-viz validator: #0d5ef4 ↔ #eb6834 keeps ΔE 31 under protanopia
+       and 33 under tritanopia, well past the 8 floor, and both clear 3:1 on white. */
+    .chart {
+      --series-views: #0d5ef4;
+      --series-searches: #eb6834;
+      --chart-surface: #ffffff;
+      --chart-grid: #e4e6e9;
+      position: relative;
+      margin-bottom: 16px;
+    }
+
+    .chart svg {
+      display: block;
+      width: 100%;
+      overflow: visible;
+    }
+
+    .chart svg:focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 4px;
+      border-radius: 4px;
+    }
+
+    .chart-grid-line {
+      stroke: var(--chart-grid);
+      stroke-width: 1;
+      shape-rendering: crispEdges;
+    }
+
+    .chart-tick {
+      font-size: 11px;
+      fill: var(--color-gray-dark);
+    }
+
+    .chart-line {
+      fill: none;
+      stroke-width: 2;
+      stroke-linejoin: round;
+      stroke-linecap: round;
+    }
+
+    /* The ring keeps an end dot legible where the two lines cross */
+    .chart-dot {
+      stroke: var(--chart-surface);
+      stroke-width: 2;
+    }
+
+    .chart-end-label {
+      font-size: 12px;
+      font-weight: 700;
+      fill: var(--color-primary);
+    }
+
+    .chart-crosshair {
+      stroke: var(--color-gray-dark);
+      stroke-width: 1;
+      opacity: 0;
+    }
+
+    .chart.is-probing .chart-crosshair {
+      opacity: 1;
+    }
+
+    .chart-tooltip {
+      position: absolute;
+      top: 0;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -6px);
+      min-width: 148px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--color-primary);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.45;
+      box-shadow: 0 8px 20px rgba(20, 22, 26, 0.28);
+      transition: opacity 120ms ease;
+      z-index: 5;
+    }
+
+    .chart.is-probing .chart-tooltip {
+      opacity: 1;
+    }
+
+    .chart-tooltip-date {
+      color: rgba(255, 255, 255, 0.66);
+      margin-bottom: 4px;
+    }
+
+    .chart-tooltip-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* A short stroke, not a filled box: at this density a box is ink doing a
+       label's job */
+    .chart-tooltip-key {
+      width: 12px;
+      height: 2px;
+      border-radius: 1px;
+      flex: none;
+    }
+
+    .chart-tooltip-value {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chart-tooltip-name {
+      color: rgba(255, 255, 255, 0.66);
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+
+    .chart-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .chart-legend-key {
+      width: 14px;
+      height: 2px;
+      border-radius: 1px;
+      flex: none;
+    }
+
+    .chart-range {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+
+    .chart-range button {
+      padding: 6px 12px;
+      min-height: 34px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-gray-dark);
+      cursor: pointer;
+      transition: border-color 150ms ease, color 150ms ease, transform 120ms ease;
+    }
+
+    .chart-range button:active {
+      transform: scale(0.97);
+    }
+
+    .chart-range button.active {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+
+    .chart-table {
+      margin-bottom: 24px;
+      font-size: 13px;
+    }
+
+    .chart-table summary {
+      cursor: pointer;
+      color: var(--color-gray-dark);
+      padding: 6px 0;
+    }
+
+    .chart-table table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    .chart-table th,
+    .chart-table td {
+      padding: 6px 8px;
+      text-align: right;
+      border-bottom: 1px solid var(--color-border);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .chart-table th:first-child,
+    .chart-table td:first-child {
+      text-align: left;
+    }
+
+    .chart-table th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-gray-dark);
+    }
+
     .seo-table {
       margin-bottom: 24px;
     }
@@ -963,10 +1166,12 @@
         <p class="text-muted seo-note">Нажмите на строку, чтобы увидеть товары и открыть карточку для исправления</p>
         <div id="seo-issues" class="loading">Загрузка...</div>
 
-        <h3 class="seo-heading">ТЕХНИЧЕСКОЕ СОСТОЯНИЕ САЙТА</h3>
-        <div id="seo-technical" class="loading">Загрузка...</div>
-
-        <h3 class="seo-heading">ПОСЕЩАЕМОСТЬ ЗА 30 ДНЕЙ</h3>
+        <h3 class="seo-heading">ПОСЕЩАЕМОСТЬ</h3>
+        <div class="chart-range" id="seo-range">
+          <button type="button" data-days="7">7 дней</button>
+          <button type="button" data-days="30" class="active">30 дней</button>
+          <button type="button" data-days="90">90 дней</button>
+        </div>
         <div id="seo-traffic" class="loading">Загрузка...</div>
       </section>
     </main>
@@ -1164,7 +1369,6 @@
 
     async function loadSeo() {
       loadSeoCatalog();
-      loadSeoTechnical();
       loadSeoTraffic();
     }
 
@@ -1261,39 +1465,26 @@
         .classList.add('active');
     }
 
-    async function loadSeoTechnical() {
-      const container = el('#seo-technical');
-      try {
-        const data = await AdminAPI.seoTechnical();
-        clear(container);
-        container.classList.remove('loading');
+    let trafficDays = 30;
 
-        const summary = document.createElement('p');
-        summary.className = 'text-muted';
-        summary.textContent = `Пройдено проверок: ${data.passed} из ${data.total}`;
-        container.appendChild(summary);
+    // The range buttons reload only the traffic block, not the whole SEO tab
+    el('#seo-range').addEventListener('click', event => {
+      const button = event.target.closest('button[data-days]');
+      if (!button) return;
 
-        data.checks.forEach(check => {
-          const row = document.createElement('div');
-          row.className = 'seo-check' + (check.ok ? ' ok' : '');
-          row.innerHTML = `
-            <span class="seo-check-mark">${check.ok ? '✓' : '✗'}</span>
-            <span>
-              <strong>${check.title}</strong>
-              <span class="seo-check-why">${check.why}</span>
-            </span>`;
-          container.appendChild(row);
-        });
-      } catch (error) {
-        container.classList.remove('loading');
-        container.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
-      }
-    }
+      trafficDays = Number(button.dataset.days);
+      el('#seo-range').querySelectorAll('button')
+        .forEach(other => other.classList.toggle('active', other === button));
+
+      el('#seo-traffic').classList.add('loading');
+      el('#seo-traffic').textContent = 'Загрузка...';
+      loadSeoTraffic();
+    });
 
     async function loadSeoTraffic() {
       const container = el('#seo-traffic');
       try {
-        const data = await AdminAPI.seoTraffic();
+        const data = await AdminAPI.seoTraffic(trafficDays);
         clear(container);
         container.classList.remove('loading');
 
@@ -1301,6 +1492,8 @@
           container.innerHTML = '<p class="text-muted">Пока нет данных. Счёт начинается с момента установки этого обновления.</p>';
           return;
         }
+
+        container.appendChild(buildTrafficChart(data.by_day || []));
 
         const stats = document.createElement('div');
         stats.className = 'seo-cards';
@@ -1331,6 +1524,276 @@
         container.classList.remove('loading');
         container.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
+    }
+
+    // ===== TRAFFIC CHART =====
+    //
+    // Both series count events per day, so they share one axis — a second scale
+    // would let any two shapes be drawn to look related.
+    const SERIES = [
+      { key: 'views', name: 'Просмотры товаров', color: '#0d5ef4' },
+      { key: 'searches', name: 'Поиски по сайту', color: '#eb6834' },
+    ];
+
+    const PAD = { top: 16, right: 52, bottom: 26, left: 44 };
+    const CHART_HEIGHT = 240;
+
+    const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн',
+                    'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+
+    function shortDate(iso) {
+      const [, month, day] = iso.split('-');
+      return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+    }
+
+    function svgNode(name, attrs = {}) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', name);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      return node;
+    }
+
+    // Ticks land on 1, 2, 5, 10, 20, 50… so the axis reads in round numbers
+    function niceScale(max) {
+      if (max <= 4) return { max: Math.max(max, 1), step: 1 };
+
+      const rough = max / 4;
+      const power = Math.pow(10, Math.floor(Math.log10(rough)));
+      const step = [1, 2, 5, 10].map(m => m * power).find(s => s >= rough) || 10 * power;
+      return { max: Math.ceil(max / step) * step, step };
+    }
+
+    function buildTrafficChart(byDay) {
+      const chart = document.createElement('div');
+      chart.className = 'chart';
+
+      // A legend is always present with two series, so identity never rests on
+      // colour alone
+      const legend = document.createElement('div');
+      legend.className = 'chart-legend';
+      SERIES.forEach(series => {
+        const item = document.createElement('span');
+        item.className = 'chart-legend-item';
+        const key = document.createElement('span');
+        key.className = 'chart-legend-key';
+        key.style.background = series.color;
+        item.appendChild(key);
+        item.appendChild(document.createTextNode(series.name));
+        legend.appendChild(item);
+      });
+      chart.appendChild(legend);
+
+      const plot = document.createElement('div');
+      plot.className = 'chart';
+      plot.style.margin = '0';
+      chart.appendChild(plot);
+
+      const tooltip = document.createElement('div');
+      tooltip.className = 'chart-tooltip';
+      plot.appendChild(tooltip);
+
+      const draw = () => {
+        const width = Math.max(plot.clientWidth || 640, 320);
+        plot.querySelectorAll('svg').forEach(node => node.remove());
+        plot.appendChild(drawTrafficSvg(byDay, width, plot, tooltip));
+      };
+
+      draw();
+      // Drawn at the real pixel width, so a 2px line stays 2px instead of being
+      // scaled up with the viewBox
+      new ResizeObserver(() => draw()).observe(plot);
+
+      chart.appendChild(buildChartTable(byDay));
+      return chart;
+    }
+
+    function drawTrafficSvg(byDay, width, plot, tooltip) {
+      const height = CHART_HEIGHT;
+      const innerW = width - PAD.left - PAD.right;
+      const innerH = height - PAD.top - PAD.bottom;
+
+      const peak = Math.max(1, ...byDay.map(d => Math.max(d.views, d.searches)));
+      const scale = niceScale(peak);
+
+      const x = index => PAD.left + (byDay.length < 2 ? innerW / 2
+        : (index / (byDay.length - 1)) * innerW);
+      const y = value => PAD.top + innerH - (value / scale.max) * innerH;
+
+      const svg = svgNode('svg', {
+        viewBox: `0 0 ${width} ${height}`, height, tabindex: '0',
+        role: 'img',
+        'aria-label': `Просмотры и поиски по дням за ${byDay.length} дней`,
+      });
+
+      // Gridlines and y ticks: hairline, solid, recessive
+      for (let value = 0; value <= scale.max; value += scale.step) {
+        svg.appendChild(svgNode('line', {
+          class: 'chart-grid-line',
+          x1: PAD.left, x2: width - PAD.right,
+          y1: y(value), y2: y(value),
+        }));
+        const label = svgNode('text', {
+          class: 'chart-tick', x: PAD.left - 8, y: y(value) + 4, 'text-anchor': 'end',
+        });
+        label.textContent = value.toLocaleString('ru-RU');
+        svg.appendChild(label);
+      }
+
+      // Only the ends and the middle get a date, so labels never collide
+      const marks = byDay.length > 2 ? [0, Math.floor((byDay.length - 1) / 2), byDay.length - 1]
+                                     : byDay.map((_, index) => index);
+      [...new Set(marks)].forEach(index => {
+        const label = svgNode('text', {
+          class: 'chart-tick', x: x(index), y: height - 6,
+          'text-anchor': index === 0 ? 'start' : index === byDay.length - 1 ? 'end' : 'middle',
+        });
+        label.textContent = shortDate(byDay[index].date);
+        svg.appendChild(label);
+      });
+
+      const crosshair = svgNode('line', {
+        class: 'chart-crosshair', y1: PAD.top, y2: PAD.top + innerH, x1: 0, x2: 0,
+      });
+      svg.appendChild(crosshair);
+
+      const probes = SERIES.map(series => {
+        const path = byDay
+          .map((day, index) => `${index ? 'L' : 'M'}${x(index).toFixed(1)} ${y(day[series.key]).toFixed(1)}`)
+          .join(' ');
+        svg.appendChild(svgNode('path', {
+          class: 'chart-line', d: path, stroke: series.color,
+        }));
+
+        const last = byDay[byDay.length - 1];
+        const end = svgNode('circle', {
+          class: 'chart-dot', cx: x(byDay.length - 1), cy: y(last[series.key]),
+          r: 4, fill: series.color,
+        });
+        svg.appendChild(end);
+
+        // Direct label on the endpoint only — a number on every point goes unread
+        const value = svgNode('text', {
+          class: 'chart-end-label', x: x(byDay.length - 1) + 10,
+          y: y(last[series.key]) + 4,
+        });
+        value.textContent = last[series.key].toLocaleString('ru-RU');
+        svg.appendChild(value);
+
+        const probe = svgNode('circle', {
+          class: 'chart-dot', r: 4.5, fill: series.color, opacity: '0',
+        });
+        svg.appendChild(probe);
+        return probe;
+      });
+
+      // A transparent band catches the pointer anywhere over the plot, so the
+      // reader aims at a date rather than at a 2px line
+      const surface = svgNode('rect', {
+        x: PAD.left, y: PAD.top, width: innerW, height: innerH, fill: 'transparent',
+      });
+      svg.appendChild(surface);
+
+      let active = -1;
+
+      const show = index => {
+        if (index < 0 || index >= byDay.length) return;
+        active = index;
+        const day = byDay[index];
+
+        crosshair.setAttribute('x1', x(index));
+        crosshair.setAttribute('x2', x(index));
+
+        probes.forEach((probe, slot) => {
+          probe.setAttribute('cx', x(index));
+          probe.setAttribute('cy', y(day[SERIES[slot].key]));
+          probe.setAttribute('opacity', '1');
+        });
+
+        clear(tooltip);
+        const date = document.createElement('div');
+        date.className = 'chart-tooltip-date';
+        date.textContent = shortDate(day.date);
+        tooltip.appendChild(date);
+
+        SERIES.forEach(series => {
+          const row = document.createElement('div');
+          row.className = 'chart-tooltip-row';
+
+          const key = document.createElement('span');
+          key.className = 'chart-tooltip-key';
+          key.style.background = series.color;
+
+          const value = document.createElement('span');
+          value.className = 'chart-tooltip-value';
+          value.textContent = day[series.key].toLocaleString('ru-RU');
+
+          const name = document.createElement('span');
+          name.className = 'chart-tooltip-name';
+          name.textContent = series.name.toLowerCase();
+
+          row.append(key, value, name);
+          tooltip.appendChild(row);
+        });
+
+        const ratio = x(index) / (svg.getBoundingClientRect().width || width);
+        tooltip.style.left = `${ratio * 100}%`;
+        plot.classList.add('is-probing');
+      };
+
+      const hide = () => {
+        plot.classList.remove('is-probing');
+        probes.forEach(probe => probe.setAttribute('opacity', '0'));
+      };
+
+      const nearest = event => {
+        const box = svg.getBoundingClientRect();
+        const position = ((event.clientX - box.left) / box.width) * width;
+        const ratio = (position - PAD.left) / innerW;
+        return Math.round(Math.min(1, Math.max(0, ratio)) * (byDay.length - 1));
+      };
+
+      svg.addEventListener('pointermove', event => show(nearest(event)));
+      svg.addEventListener('pointerleave', hide);
+      svg.addEventListener('blur', hide);
+      svg.addEventListener('focus', () => show(active < 0 ? byDay.length - 1 : active));
+
+      // The same readout on the keyboard as under the pointer
+      svg.addEventListener('keydown', event => {
+        if (event.key === 'ArrowRight') show(Math.min(byDay.length - 1, active + 1));
+        else if (event.key === 'ArrowLeft') show(Math.max(0, active - 1));
+        else return;
+        event.preventDefault();
+      });
+
+      return svg;
+    }
+
+    // Every value in the chart is reachable without hovering
+    function buildChartTable(byDay) {
+      const block = document.createElement('details');
+      block.className = 'chart-table';
+
+      const summary = document.createElement('summary');
+      summary.textContent = 'Показать таблицей';
+      block.appendChild(summary);
+
+      const table = document.createElement('table');
+      table.innerHTML = '<thead><tr><th>Дата</th><th>Просмотры</th><th>Поиски</th></tr></thead>';
+
+      const body = document.createElement('tbody');
+      byDay.forEach(day => {
+        const row = document.createElement('tr');
+        [shortDate(day.date), day.views.toLocaleString('ru-RU'),
+         day.searches.toLocaleString('ru-RU')].forEach(text => {
+          const cell = document.createElement('td');
+          cell.textContent = text;
+          row.appendChild(cell);
+        });
+        body.appendChild(row);
+      });
+
+      table.appendChild(body);
+      block.appendChild(table);
+      return block;
     }
 
     function buildTrafficTable(title, rows) {

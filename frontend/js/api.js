@@ -229,8 +229,6 @@ const AdminAPI = {
 
   seoCatalog: () => apiCall('/admin/seo/catalog', { headers: authHeader() }),
 
-  seoTechnical: () => apiCall('/admin/seo/technical', { headers: authHeader() }),
-
   seoTraffic: (days = 30) => apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
 
   getBrands: () => {

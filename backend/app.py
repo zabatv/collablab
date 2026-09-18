@@ -1117,46 +1117,6 @@ def seo_catalog():
         } for issue in issues]
     })
 
-@app.route('/api/admin/seo/technical', methods=['GET'])
-@require_admin
-def seo_technical():
-    """What the site itself is missing for search engines"""
-    frontend = os.path.join(BASE_DIR, '..', 'frontend')
-
-    def read_page(name):
-        path = os.path.join(frontend, name)
-        if not os.path.exists(path):
-            return None
-        with open(path, encoding='utf-8') as f:
-            return f.read()
-
-    pages = {name: read_page(name) for name in ('index.html', 'catalog.html', 'product.html')}
-    present = {name: html for name, html in pages.items() if html}
-
-    def every_page_has(fragment):
-        return bool(present) and all(fragment in html for html in present.values())
-
-    checks = [
-        {'key': 'description', 'title': 'Описание страниц (meta description)',
-         'ok': every_page_has('name="description"'),
-         'why': 'Текст под заголовком в результатах поиска'},
-        {'key': 'og', 'title': 'Теги для соцсетей (Open Graph)',
-         'ok': every_page_has('property="og:'),
-         'why': 'Картинка и заголовок при отправке ссылки в мессенджер'},
-        {'key': 'unique_titles', 'title': 'Уникальные заголовки товаров',
-         'ok': 'id="page-title"' in (pages.get('product.html') or ''),
-         'why': 'Сейчас у всех карточек один заголовок «Товар - ROBOT»'},
-        {'key': 'prerender', 'title': 'Товары видны без JavaScript',
-         'ok': False,
-         'why': 'Робот получает пустую страницу: название и цена подставляются скриптом'},
-    ]
-
-    return jsonify({
-        'passed': sum(1 for c in checks if c['ok']),
-        'total': len(checks),
-        'checks': checks
-    })
-
 @app.route('/api/admin/seo/traffic', methods=['GET'])
 @require_admin
 def seo_traffic():
@@ -1180,8 +1140,29 @@ def seo_traffic():
                 .order_by(db.func.count(SearchQuery.id).desc())
                 .limit(20).all())
 
+    # One row per calendar day, so the chart can draw a line rather than a total
+    def daily(model, stamp):
+        counts = dict(db.session.query(db.func.date(stamp), db.func.count(model.id))
+                      .filter(stamp >= since)
+                      .group_by(db.func.date(stamp)).all())
+        return counts
+
+    views_by_day = daily(ProductView, ProductView.viewed_at)
+    searches_by_day = daily(SearchQuery, SearchQuery.searched_at)
+
+    start = (datetime.utcnow() - timedelta(days=days - 1)).date()
+    by_day = []
+    for offset in range(days):
+        day = (start + timedelta(days=offset)).isoformat()
+        by_day.append({
+            'date': day,
+            'views': views_by_day.get(day, 0),
+            'searches': searches_by_day.get(day, 0),
+        })
+
     return jsonify({
         'days': days,
+        'by_day': by_day,
         'total_views': db.session.query(db.func.count(ProductView.id))
                        .filter(ProductView.viewed_at >= since).scalar() or 0,
         'total_searches': db.session.query(db.func.count(SearchQuery.id))
