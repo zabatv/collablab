@@ -302,9 +302,12 @@ def get_category(category_id):
 
 @app.route('/api/brands', methods=['GET'])
 def get_brands():
-    """Get all brands"""
-    brands = Brand.query.all()
-    return jsonify([brand.to_dict() for brand in brands])
+    """Brands a visitor can actually filter by.
+
+    A brand with nothing under it is a line in the filter that always
+    returns nothing, so it is left out until it has products."""
+    brands = Brand.query.order_by(Brand.name).all()
+    return jsonify([brand.to_dict() for brand in brands if brand.products])
 
 @app.route('/api/products', methods=['GET'])
 def get_products():
@@ -966,20 +969,136 @@ def admin_banners_order():
 @app.route('/api/admin/brands', methods=['GET', 'POST'])
 @require_admin
 def admin_brands():
-    """Manage brands"""
+    """Every brand, or a new one"""
     if request.method == 'GET':
-        brands = Brand.query.all()
+        brands = Brand.query.order_by(Brand.name).all()
         return jsonify([brand.to_dict() for brand in brands])
 
-    data = request.get_json()
+    data = request.get_json() or {}
+    name = str(data.get('name', '')).strip()
+    if not name:
+        return jsonify({'error': 'Название бренда не может быть пустым'}), 400
+
+    if Brand.query.filter(db.func.lower(Brand.name) == name.lower()).first():
+        return jsonify({'error': f'Бренд «{name}» уже есть'}), 400
+
     try:
-        brand = Brand(name=data['name'])
+        brand = Brand(name=name[:100])
         db.session.add(brand)
         db.session.commit()
         return jsonify(brand.to_dict()), 201
-    except Exception as e:
+    except Exception as error:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(error)}), 400
+
+@app.route('/api/admin/brands/<int:brand_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def admin_brand(brand_id):
+    """Rename a brand, or remove it.
+
+    A brand is a label, not an owner: deleting one unlabels its products
+    rather than taking them with it."""
+    brand = Brand.query.get_or_404(brand_id)
+
+    if request.method == 'DELETE':
+        unlabelled = len(brand.products)
+        for product in brand.products:
+            product.brand_id = None
+
+        db.session.delete(brand)
+        db.session.commit()
+        return jsonify({'unlabelled': unlabelled})
+
+    data = request.get_json() or {}
+    if 'name' in data:
+        name = str(data['name']).strip()
+        if not name:
+            return jsonify({'error': 'Название бренда не может быть пустым'}), 400
+
+        clash = Brand.query.filter(db.func.lower(Brand.name) == name.lower(),
+                                   Brand.id != brand.id).first()
+        if clash:
+            return jsonify({'error': f'Бренд «{name}» уже есть'}), 400
+
+        brand.name = name[:100]
+
+    db.session.commit()
+    return jsonify(brand.to_dict())
+
+@app.route('/api/admin/brands/<int:brand_id>/upload-logo', methods=['POST', 'DELETE'])
+@require_admin
+def upload_brand_logo(brand_id):
+    """The brand's mark, shown on its products and in the filter"""
+    brand = Brand.query.get_or_404(brand_id)
+
+    if request.method == 'DELETE':
+        brand.logo = None
+        db.session.commit()
+        return jsonify(brand.to_dict())
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'Файл не передан'}), 400
+
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    try:
+        brand.logo = save_upload(file, f'brand{brand_id}', IMAGE_EXTENSIONS)
+        db.session.commit()
+        return jsonify(brand.to_dict()), 201
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+
+@app.route('/api/admin/brands/<int:brand_id>/assign', methods=['POST'])
+@require_admin
+def assign_brand(brand_id):
+    """Put a brand on many products at once.
+
+    Three hundred positions cannot be labelled one form at a time. A whole
+    branch of the catalogue, or every article number starting with the same
+    letters, goes in one call — which is how a supplier's range actually
+    sits in a catalogue like this one."""
+    brand = Brand.query.get_or_404(brand_id)
+    data = request.get_json() or {}
+
+    query = Product.query
+    described = False
+
+    category_id = data.get('category_id')
+    if category_id:
+        category = Category.query.get(category_id)
+        if not category:
+            return jsonify({'error': 'Категория не найдена'}), 400
+        branch = [node.id for node in category.descendants()]
+        query = query.filter(Product.category_id.in_(branch))
+        described = True
+
+    prefix = str(data.get('sku_prefix', '')).strip()
+    if prefix:
+        query = query.filter(Product.sku.ilike(f'{prefix}%'))
+        described = True
+
+    if not described:
+        return jsonify({
+            'error': 'Укажите раздел или начало артикула — '
+                     'иначе бренд встанет на весь каталог'}), 400
+
+    # Clearing is how a mistaken assignment is undone
+    new_brand_id = None if data.get('clear') else brand.id
+    products = query.all()
+    for product in products:
+        product.brand_id = new_brand_id
+
+    db.session.commit()
+
+    # The brand's product list was loaded before the change, so without this
+    # the answer would report the count as it was a moment ago
+    db.session.refresh(brand)
+    return jsonify({'updated': len(products), 'brand': brand.to_dict()})
 
 # ===== EXCEL IMPORT/EXPORT =====
 

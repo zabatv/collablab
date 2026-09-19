@@ -1288,6 +1288,33 @@ header {
   }
 }
 
+/* ===== BRAND MARKS =====
+   Small and out of the way. On a catalogue card the part is what is being
+   chosen; the brand only says whose it is. */
+.card-brand {
+  position: absolute;
+  top: var(--space-xs);
+  left: var(--space-xs);
+  max-width: 56px;
+  max-height: 20px;
+  width: auto;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.brand-mark {
+  display: inline-block;
+  max-width: 72px;
+  max-height: 22px;
+  width: auto;
+  vertical-align: middle;
+  margin-right: 6px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
 /* The one you are already looking at, among its neighbours */
 .tile-current {
   border-color: var(--ink);

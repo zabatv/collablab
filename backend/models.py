@@ -91,7 +91,10 @@ class Brand(db.Model):
         return {
             'id': self.id,
             'name': self.name,
-            'logo': self.logo
+            'logo': self.logo,
+            # How many positions carry the brand — what the admin needs to see
+            # before deleting one, and what hides an empty brand from a filter
+            'product_count': len(self.products),
         }
 
 class Product(db.Model):

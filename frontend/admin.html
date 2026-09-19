@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260928">
+  <link rel="stylesheet" href="css/style.css?v=20260929">
   <style>
     .admin-layout {
       display: grid;
@@ -1103,6 +1103,41 @@
       white-space: nowrap;
     }
 
+    /* ===== BRANDS ===== */
+    .brand-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .brand-logo {
+      width: 96px;
+      height: 44px;
+    }
+
+    .brand-text {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: 14px;
+    }
+
+    .brand-text .text-muted {
+      font-size: 12px;
+    }
+
     /* ===== PHONE =====
        The panel was desktop-only: a fixed sidebar beside a seven-column table.
        On a phone that widened the layout viewport until the whole page was
@@ -1465,7 +1500,16 @@
           <button class="btn btn-primary" onclick="openAddBrandModal()">ДОБАВИТЬ БРЕНД</button>
         </div>
 
-        <div id="brands-list"></div>
+        <p class="text-muted" style="margin-bottom: 16px; max-width: 74ch;">
+          Щелчок по квадрату загружает логотип бренда — он появится на карточке
+          и на странице товара. «Проставить товарам» вешает бренд сразу на целый
+          раздел каталога или на все артикулы, начинающиеся одинаково: по одному
+          триста позиций не разметить. Бренд без товаров в фильтр на сайте не
+          попадает. Удаление бренда снимает метку с его товаров, но сами товары
+          остаются на месте.
+        </p>
+
+        <div id="brands-list" class="brand-list"></div>
       </section>
 
       <!-- SEO Section -->
@@ -1650,8 +1694,44 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20260928"></script>
-  <script src="js/main.js?v=20260928"></script>
+  <!-- Labelling many products at once -->
+  <div class="modal" id="assign-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeAssignBrand()">&times;</span>
+      <h2>ПРОСТАВИТЬ БРЕНД</h2>
+      <p class="text-muted" style="margin-top: 8px;">
+        Бренд <strong id="assign-brand-name"></strong> встанет на товары,
+        подходящие под условие ниже. Можно указать раздел, начало артикула
+        или и то и другое сразу — тогда возьмутся товары, подходящие под оба.
+      </p>
+
+      <form id="assign-form" class="admin-form" style="margin-top: 20px;">
+        <div class="form-group">
+          <label>Раздел каталога</label>
+          <select id="assign-category"></select>
+          <small class="text-muted">Берётся вся ветка, вместе с подкатегориями</small>
+        </div>
+
+        <div class="form-group">
+          <label>Начало артикула</label>
+          <input type="text" id="assign-prefix" placeholder="например NG-PL">
+          <small class="text-muted">Регистр не важен</small>
+        </div>
+
+        <div class="form-group">
+          <label style="display: flex; align-items: center; gap: 8px; font-weight: 500;">
+            <input type="checkbox" id="assign-clear" style="width: auto;">
+            Наоборот, снять бренд с этих товаров
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">ПРИМЕНИТЬ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="js/api.js?v=20260929"></script>
+  <script src="js/main.js?v=20260929"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -3255,18 +3335,172 @@
         const list = el('#brands-list');
         clear(list);
 
-        brands.forEach(brand => {
-          list.innerHTML += `
-            <div style="padding: 16px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 12px;">
-              <h4>${brand.name}</h4>
-            </div>
-          `;
-        });
+        if (!brands.length) {
+          list.innerHTML = '<p class="text-muted">Брендов пока нет.</p>';
+          return;
+        }
+
+        brands.forEach(brand => list.appendChild(brandRow(brand)));
       } catch (error) {
         reportFailure('Не удалось загрузить бренды', error);
         el('#brands-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
     }
+
+    function brandRow(brand) {
+      const row = document.createElement('div');
+      row.className = 'brand-row';
+
+      row.appendChild(brandLogoButton(brand));
+
+      const text = document.createElement('div');
+      text.className = 'brand-text';
+      text.innerHTML = `
+        <strong>${escapeHtml(brand.name)}</strong>
+        <span class="text-muted">${brand.product_count
+          ? `${brand.product_count} товаров`
+          : 'нет товаров — в фильтр на сайте не попадает'}</span>`;
+      row.appendChild(text);
+
+      const actions = document.createElement('div');
+      actions.className = 'cat-admin-actions';
+      actions.append(
+        smallButton('Проставить товарам', () => openAssignBrand(brand)),
+        smallButton('Переименовать', () => renameBrand(brand)),
+        smallButton('Удалить', () => removeBrand(brand), 'danger'));
+      row.appendChild(actions);
+
+      return row;
+    }
+
+    function brandLogoButton(brand) {
+      const wrap = document.createElement('label');
+      wrap.className = 'cat-admin-icon brand-logo' + (brand.logo ? ' has-icon' : '');
+      wrap.title = brand.logo ? 'Заменить логотип' : 'Загрузить логотип';
+
+      wrap.innerHTML = brand.logo
+        ? `<img src="${escapeHtml(brand.logo)}" alt="">`
+        : '<span class="cat-admin-icon-empty">Логотип</span>';
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.hidden = true;
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        try {
+          await AdminAPI.uploadBrandLogo(brand.id, file);
+          showNotification('Логотип загружен');
+          loadBrands();
+        } catch (error) {
+          showNotification(failureText(error), 'error');
+        }
+      };
+      wrap.appendChild(input);
+
+      if (brand.logo) {
+        const clearLogo = document.createElement('button');
+        clearLogo.type = 'button';
+        clearLogo.className = 'cat-admin-icon-clear';
+        clearLogo.textContent = '×';
+        clearLogo.title = 'Убрать логотип';
+        clearLogo.onclick = async (event) => {
+          event.preventDefault();
+          try {
+            await AdminAPI.clearBrandLogo(brand.id);
+            showNotification('Логотип убран');
+            loadBrands();
+          } catch (error) {
+            showNotification(failureText(error), 'error');
+          }
+        };
+        wrap.appendChild(clearLogo);
+      }
+
+      return wrap;
+    }
+
+    async function renameBrand(brand) {
+      const name = prompt('Название бренда:', brand.name);
+      if (name === null || name.trim() === brand.name) return;
+
+      try {
+        await AdminAPI.updateBrand(brand.id, { name });
+        showNotification('Бренд переименован');
+        loadBrands();
+        loadBrandsForSelect();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    async function removeBrand(brand) {
+      const warning = brand.product_count
+        ? `Удалить бренд «${brand.name}»? С ${brand.product_count} товаров снимется метка, сами товары останутся.`
+        : `Удалить бренд «${brand.name}»?`;
+      if (!confirm(warning)) return;
+
+      try {
+        const result = await AdminAPI.deleteBrand(brand.id);
+        showNotification(result?.unlabelled
+          ? `Бренд удалён, метка снята с ${result.unlabelled} товаров`
+          : 'Бренд удалён');
+        loadBrands();
+        loadBrandsForSelect();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    // The brand being labelled, while the dialog is open
+    let assigningBrand = null;
+
+    function openAssignBrand(brand) {
+      assigningBrand = brand;
+      el('#assign-brand-name').textContent = brand.name;
+      el('#assign-prefix').value = '';
+      el('#assign-clear').checked = false;
+
+      // The tree, indented, so a whole branch can be labelled at once
+      const select = el('#assign-category');
+      select.innerHTML = '<option value="">— не по разделу —</option>';
+      categoryOptions(categoryTree).forEach(option => {
+        select.innerHTML +=
+          `<option value="${option.id}">${escapeHtml(option.name)}</option>`;
+      });
+
+      el('#assign-modal').classList.add('active');
+    }
+
+    function closeAssignBrand() {
+      el('#assign-modal').classList.remove('active');
+      assigningBrand = null;
+    }
+
+    el('#assign-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!assigningBrand) return;
+
+      const selection = { clear: el('#assign-clear').checked };
+      const category = el('#assign-category').value;
+      if (category) selection.category_id = Number(category);
+
+      const prefix = el('#assign-prefix').value.trim();
+      if (prefix) selection.sku_prefix = prefix;
+
+      try {
+        const result = await AdminAPI.assignBrand(assigningBrand.id, selection);
+        showNotification(selection.clear
+          ? `Метка снята с ${result.updated} товаров`
+          : `Бренд проставлен ${result.updated} товарам`);
+        closeAssignBrand();
+        loadBrands();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    });
 
     function openAddBrandModal() {
       el('#brand-form').reset();

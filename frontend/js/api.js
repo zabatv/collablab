@@ -334,5 +334,40 @@ const AdminAPI = {
       headers,
       body: data
     });
+  },
+
+  updateBrand: (id, data) => {
+    const headers = authHeader();
+    return apiCall(`/admin/brands/${id}`, { method: 'PUT', headers, body: data });
+  },
+
+  // Deleting a brand unlabels its products; it does not take them with it
+  deleteBrand: (id) => {
+    const headers = authHeader();
+    return apiCall(`/admin/brands/${id}`, { method: 'DELETE', headers });
+  },
+
+  uploadBrandLogo: (id, file, onProgress) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    return uploadWithProgress(
+      `${API_BASE}/admin/brands/${id}/upload-logo`, formData, onProgress);
+  },
+
+  clearBrandLogo: (id) => {
+    const headers = authHeader();
+    return apiCall(`/admin/brands/${id}/upload-logo`, { method: 'DELETE', headers });
+  },
+
+  // Labels a whole branch of the catalogue, or every article number that
+  // starts the same way. `clear: true` takes the label back off.
+  assignBrand: (id, selection) => {
+    const headers = authHeader();
+    return apiCall(`/admin/brands/${id}/assign`, {
+      method: 'POST',
+      headers,
+      body: selection
+    });
   }
 };

@@ -75,6 +75,9 @@ function createProductCard(product) {
         <img src="${escapeHtml(product.image || NO_IMAGE)}" alt="${escapeHtml(title)}"
              loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
         ${product.discount ? `<div class="card-badge">-${product.discount}%</div>` : ''}
+        ${product.brand?.logo ? `
+          <img class="card-brand" src="${escapeHtml(product.brand.logo)}"
+               alt="${escapeHtml(product.brand.name)}" loading="lazy">` : ''}
       </div>
       <div class="card-content">
         <div class="card-sku">${escapeHtml(product.sku || '')}</div>

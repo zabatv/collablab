@@ -8,7 +8,7 @@
   <title>Товар — ROBOT</title>
   <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260928">
+  <link rel="stylesheet" href="css/style.css?v=20260929">
 </head>
 <body>
   <!-- Header -->
@@ -115,10 +115,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260928"></script>
-  <script src="js/main.js?v=20260928"></script>
-  <script src="js/effects.js?v=20260928"></script>
-  <script src="js/consent.js?v=20260928"></script>
+  <script src="js/api.js?v=20260929"></script>
+  <script src="js/main.js?v=20260929"></script>
+  <script src="js/effects.js?v=20260929"></script>
+  <script src="js/consent.js?v=20260929"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -241,7 +241,12 @@
               ${product.brand?.name ? `
                 <div class="product-meta-item">
                   <div class="product-meta-label">Бренд</div>
-                  <div class="product-meta-value">${escapeHtml(product.brand.name)}</div>
+                  <div class="product-meta-value">
+                    ${product.brand.logo ? `
+                      <img class="brand-mark" src="${escapeHtml(product.brand.logo)}"
+                           alt="${escapeHtml(product.brand.name)}">` : ''}
+                    ${escapeHtml(product.brand.name)}
+                  </div>
                 </div>` : ''}
               <div class="product-meta-item">
                 <div class="product-meta-label">Категория</div>
