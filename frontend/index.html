@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260920">
+  <link rel="stylesheet" href="css/style.css?v=20260921">
 </head>
 <body>
   <!-- Header -->
@@ -127,10 +127,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260920"></script>
-  <script src="js/main.js?v=20260920"></script>
-  <script src="js/effects.js?v=20260920"></script>
-  <script src="js/consent.js?v=20260920"></script>
+  <script src="js/api.js?v=20260921"></script>
+  <script src="js/main.js?v=20260921"></script>
+  <script src="js/effects.js?v=20260921"></script>
+  <script src="js/consent.js?v=20260921"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -154,11 +154,9 @@
         }
 
         clear(sections);
-        filled.forEach((section, index) => {
-          // The first section opens, the rest stay shut: the point of the
-          // accordion is that the page does not dump everything at once
-          renderSection(sections, section, index === 0);
-        });
+        // Everything stands open: the catalogue shows what it has, and the
+        // bars are there for folding away what you are not looking at
+        filled.forEach(section => renderSection(sections, section, true));
       } catch (error) {
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
@@ -187,8 +185,10 @@
       `).join('');
     }
 
-    // A section is a bar that opens and closes. Open, it shows the
+    // A section is a bar that folds. It stands open, showing the
     // subcategories under it — names and photographs, not a wall of products.
+    // The body is a grid row that goes from 1fr to 0fr, which is what lets
+    // the fold animate without anybody measuring a height.
     function renderSection(container, category, open) {
       const section = document.createElement('section');
       section.className = 'section-block reveal';
@@ -204,42 +204,53 @@
 
       const body = document.createElement('div');
       body.className = 'section-body';
-      body.hidden = !open;
+      body.dataset.open = String(open);
+
+      const inner = document.createElement('div');
+      inner.className = 'section-body-inner';
+      body.appendChild(inner);
 
       head.addEventListener('click', () => {
-        const nowOpen = body.hidden;
-        body.hidden = !nowOpen;
+        const nowOpen = body.dataset.open !== 'true';
+        body.dataset.open = String(nowOpen);
         head.setAttribute('aria-expanded', String(nowOpen));
-        if (nowOpen) fillSection(body, category);
+        // A section shut on the first visit still has nothing in it
+        if (nowOpen) fillSection(inner, category);
       });
 
       section.append(head, body);
       container.appendChild(section);
 
-      if (open) fillSection(body, category);
+      if (open) fillSection(inner, category);
     }
 
     // Filled the first time the section is opened, not before
-    async function fillSection(body, category) {
-      if (body.dataset.filled) return;
-      body.dataset.filled = '1';
+    async function fillSection(inner, category) {
+      if (inner.dataset.filled) return;
+      inner.dataset.filled = '1';
 
       if (category.children && category.children.length) {
-        body.innerHTML = `
-          <div class="tile-grid">
-            ${category.children.map(child => categoryTile(child)).join('')}
-          </div>
-          <a class="section-all" href="catalog.html?category=${category.id}">
-            Все ${category.total_count} товаров раздела →
-          </a>`;
+        inner.innerHTML = `
+          <div class="section-pad">
+            <div class="tile-grid">
+              ${category.children.map(categoryTile).join('')}
+            </div>
+            <a class="section-all" href="catalog.html?category=${category.id}">
+              Все ${category.total_count} товаров раздела
+              <span class="section-all-arrow" aria-hidden="true">→</span>
+            </a>
+          </div>`;
         return;
       }
 
       // A section with no subcategories shows its products instead
+      const pad = document.createElement('div');
+      pad.className = 'section-pad';
       const grid = document.createElement('div');
       grid.className = 'grid grid-4';
       renderSkeletons(grid, 4);
-      body.appendChild(grid);
+      pad.appendChild(grid);
+      inner.appendChild(pad);
 
       try {
         const data = await ProductAPI.getProducts({
@@ -249,16 +260,19 @@
         const all = document.createElement('a');
         all.className = 'section-all';
         all.href = `catalog.html?category=${category.id}`;
-        all.textContent = `Все ${category.total_count} товаров раздела →`;
-        body.appendChild(all);
+        all.innerHTML = `Все ${category.total_count} товаров раздела
+          <span class="section-all-arrow" aria-hidden="true">→</span>`;
+        pad.appendChild(all);
       } catch (error) {
         grid.innerHTML = '<p class="text-muted">Не удалось загрузить товары</p>';
       }
     }
 
-    function categoryTile(category) {
+    // --i is the tile's place in the row: the stagger is a CSS delay, so
+    // opening a section costs no JavaScript at all
+    function categoryTile(category, index) {
       return `
-        <a class="tile" href="catalog.html?category=${category.id}">
+        <a class="tile" href="catalog.html?category=${category.id}" style="--i: ${index}">
           <span class="tile-image">
             <img src="${escapeHtml(category.image || NO_IMAGE)}" alt=""
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">

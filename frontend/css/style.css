@@ -86,6 +86,8 @@
   --press: 120ms;
   --quick: 160ms;
   --settle: 220ms;
+  /* Long enough that a section unfolding reads as one movement */
+  --unfold: 340ms;
 
   --transition: color var(--quick) ease, background-color var(--quick) ease,
     border-color var(--quick) ease;
@@ -861,15 +863,21 @@ header {
 }
 
 /* ===== SECTIONS AND TILES =====
-   A section is a bar that opens and closes; open, it shows what is under it
-   as names and photographs. The first screen of the catalogue is a list of
-   places to go, not a wall of three hundred parts. */
+   A section is a bar that folds. It stands open, showing what is under it as
+   names and photographs, so the first screen of the catalogue is a list of
+   places to go rather than a wall of three hundred parts. */
 .section-block {
   margin-bottom: var(--space-sm);
   border: 1px solid var(--line);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--settle) var(--ease-out);
+}
+
+.section-block:has(.section-body[data-open="true"]) {
+  box-shadow: var(--shadow-md);
 }
 
 .section-head-bar {
@@ -877,7 +885,7 @@ header {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: 14px var(--space-md);
   background: var(--ink);
   color: #fff;
   font-size: var(--text-md);
@@ -885,7 +893,26 @@ header {
   letter-spacing: -0.01em;
   text-align: left;
   cursor: pointer;
+  position: relative;
   transition: background-color var(--quick) ease;
+}
+
+/* A hairline of accent under the bar, drawn on only while it is open */
+.section-head-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--unfold) var(--ease-out);
+}
+
+.section-head-bar[aria-expanded="true"]::after {
+  transform: scaleX(1);
 }
 
 .section-title {
@@ -894,36 +921,78 @@ header {
 }
 
 .section-count {
-  font-size: var(--text-xs);
+  flex: none;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.85);
 }
 
 /* Points right when shut, down when open — the only state the bar shows */
 .section-chevron {
-  width: 9px;
-  height: 9px;
   flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: background-color var(--quick) ease, transform var(--unfold) var(--ease-out);
+}
+
+.section-chevron::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(-45deg);
-  margin-left: 2px;
-  transition: transform var(--settle) var(--ease-out);
+  transform: translateX(-2px) rotate(-45deg);
+  transition: transform var(--unfold) var(--ease-out);
 }
 
-.section-head-bar[aria-expanded="true"] .section-chevron {
-  transform: rotate(45deg);
+.section-head-bar[aria-expanded="true"] .section-chevron::before {
+  transform: translateY(-2px) rotate(45deg);
 }
 
+/* The fold itself. A grid row going from 1fr to 0fr animates to the content's
+   own height, so nothing has to be measured in JavaScript. */
 .section-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  background: var(--surface-sunken);
+  transition: grid-template-rows var(--unfold) var(--ease-out);
+}
+
+.section-body[data-open="false"] {
+  grid-template-rows: 0fr;
+}
+
+.section-body-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.section-pad {
   padding: var(--space-md);
 }
 
 .section-all {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: var(--space-md);
   font-size: var(--text-sm);
   font-weight: 620;
+}
+
+.section-all-arrow {
+  transition: transform var(--settle) var(--ease-out);
 }
 
 .tile-grid {
@@ -938,14 +1007,57 @@ header {
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-sm);
+  border: 1px solid transparent;
   border-radius: var(--radius-md);
+  background: var(--surface);
   color: var(--ink);
   text-align: center;
-  transition: background-color var(--quick) ease, transform var(--press) var(--ease-out);
+  transition:
+    opacity 340ms var(--ease-out),
+    transform 340ms var(--ease-out),
+    border-color var(--quick) ease,
+    box-shadow var(--settle) var(--ease-out);
+}
+
+/* Inside a folding section the tiles rise in one after another as it opens,
+   and go at once when it shuts. The stagger is a delay calculated off --i,
+   so it costs nothing to run and nothing to reverse. */
+.section-body .tile {
+  opacity: 0;
+  transform: translateY(12px);
+  transition-delay: calc(var(--i, 0) * 28ms);
+}
+
+.section-block.is-revealed .section-body[data-open="true"] .tile {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.section-body[data-open="false"] .tile {
+  transition-delay: 0s;
+}
+
+/* The same entrance on the catalogue page, where the tiles are drawn once
+   and never folded away */
+.tile-enter {
+  animation: tile-in 340ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 28ms);
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .tile:active {
   transform: scale(0.98);
+  transition-delay: 0s;
 }
 
 .tile-image {
@@ -955,6 +1067,9 @@ header {
   align-items: center;
   justify-content: center;
   padding: var(--space-xs);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  overflow: hidden;
 }
 
 .tile-image img {
@@ -967,7 +1082,10 @@ header {
   transition: transform var(--settle) var(--ease-out);
 }
 
+/* Takes the slack, so a name that wraps onto two lines does not push its
+   own count out of line with the counts beside it */
 .tile-name {
+  flex: 1;
   font-size: var(--text-sm);
   font-weight: 620;
   line-height: 1.35;
@@ -1977,8 +2095,19 @@ footer {
     background: #22262d;
   }
 
+  .section-head-bar:hover .section-chevron {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .section-all:hover .section-all-arrow {
+    transform: translateX(3px);
+  }
+
+  /* The tile is already white on a sunken panel, so hover draws its edge
+     instead of repainting the face */
   .tile:hover {
-    background: var(--surface-sunken);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-md);
   }
 
   .cat-row:hover {
@@ -2231,6 +2360,22 @@ footer {
     gap: var(--space-xs);
   }
 
+  /* Two subcategories to a row. At the desktop minimum only one fits, and a
+     phone screen filled by a single photograph tells a buyer nothing. */
+  .tile-grid {
+    grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+    gap: var(--space-xs);
+  }
+
+  .section-pad {
+    padding: var(--space-sm);
+  }
+
+  .section-head-bar {
+    padding: 12px var(--space-sm);
+    font-size: var(--text-base);
+  }
+
   .header-main {
     padding: var(--space-xs) 0;
     gap: var(--space-xs);
@@ -2292,11 +2437,19 @@ footer {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
   }
 
   .card:hover,
   .card:active,
   .btn:active {
+    transform: none;
+  }
+
+  /* The fold still happens, it just happens at once. The tiles must not be
+     left invisible when the transition that would reveal them is gone. */
+  .section-body[data-open="true"] .tile {
+    opacity: 1;
     transform: none;
   }
 }

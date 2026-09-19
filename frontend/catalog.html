@@ -10,7 +10,7 @@
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260920">
+  <link rel="stylesheet" href="css/style.css?v=20260921">
 </head>
 <body>
   <!-- Header -->
@@ -157,10 +157,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260920"></script>
-  <script src="js/main.js?v=20260920"></script>
-  <script src="js/effects.js?v=20260920"></script>
-  <script src="js/consent.js?v=20260920"></script>
+  <script src="js/api.js?v=20260921"></script>
+  <script src="js/main.js?v=20260921"></script>
+  <script src="js/effects.js?v=20260921"></script>
+  <script src="js/consent.js?v=20260921"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -320,8 +320,10 @@
       block.hidden = children.length === 0;
       if (!children.length) return;
 
-      grid.innerHTML = children.map(child => `
-        <a class="tile" href="catalog.html?category=${child.id}">
+      // --i staggers the entrance; the animation is in the stylesheet
+      grid.innerHTML = children.map((child, index) => `
+        <a class="tile tile-enter" href="catalog.html?category=${child.id}"
+           style="--i: ${index}">
           <span class="tile-image">
             <img src="${escapeHtml(child.image || NO_IMAGE)}" alt=""
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
