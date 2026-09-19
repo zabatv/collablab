@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261004">
+  <link rel="stylesheet" href="css/style.css?v=20261005">
   <style>
     .admin-layout {
       display: grid;
@@ -1929,8 +1929,8 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20261004"></script>
-  <script src="js/main.js?v=20261004"></script>
+  <script src="js/api.js?v=20261005"></script>
+  <script src="js/main.js?v=20261005"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -3947,7 +3947,11 @@
       const file = event.target.files[0];
       if (!file) return;
 
-      if (!confirm(`Импортировать товары из файла "${file.name}"?\n\nСуществующие товары (по SKU) будут обновлены.`)) {
+      if (!confirm(`Импортировать каталог из файла "${file.name}"?\n\n` +
+                   `Товары ищутся по артикулу, категории — по пути, бренды — по названию: ` +
+                   `совпавшие обновятся, остальные добавятся.\n` +
+                   `Если в файле есть листы «Категории», «Бренды» и «Слайдер», ` +
+                   `они тоже будут прочитаны.`)) {
         event.target.value = '';
         return;
       }

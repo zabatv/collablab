@@ -1356,6 +1356,11 @@ def export_excel():
     for row in rows_with_photo:
         ws.row_dimensions[row].height = PHOTO_CELL_SIZE * 0.78
 
+    # Everything else the catalogue is made of, so one file is the whole of it
+    export_categories_sheet(wb)
+    export_brands_sheet(wb)
+    export_banners_sheet(wb)
+
     # Save to buffer
     output = io.BytesIO()
     wb.save(output)
@@ -1365,8 +1370,114 @@ def export_excel():
         output,
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         as_attachment=True,
-        download_name=f'products_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        download_name=f'catalogue_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
+
+# ===== THE OTHER SHEETS =====
+# Products alone are not the catalogue: the tree, the brands and the slides
+# are part of it too. One file carries all four, and the same file read back
+# restores them — which is what makes it a backup rather than a price list.
+
+SHEET_CATEGORIES = 'Категории'
+SHEET_BRANDS = 'Бренды'
+SHEET_BANNERS = 'Слайдер'
+
+def uploaded_file_path(stored):
+    """Absolute path of something under /uploads, or None if it is not there."""
+    if not stored or not stored.startswith('/uploads/'):
+        return None
+    path = os.path.join(app.config['UPLOAD_FOLDER'], os.path.basename(stored))
+    return path if os.path.exists(path) else None
+
+def write_sheet(wb, title, headers, rows, picture_column=None):
+    """A sheet with a header row, values, and pictures embedded in one column.
+
+    `rows` yields (values, picture_path). The picture travels inside the file,
+    so a logo or a slide survives the trip out and back without anyone having
+    to keep a folder of images beside the spreadsheet."""
+    ws = wb.create_sheet(title)
+
+    header_font = Font(bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
+
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    rows_with_picture = []
+    for index, (values, picture_path) in enumerate(rows, start=2):
+        for col, value in enumerate(values, 1):
+            ws.cell(row=index, column=col, value=value)
+
+        if picture_column and picture_path:
+            picture = XLImage(picture_path)
+            picture.width = PHOTO_CELL_SIZE
+            picture.height = PHOTO_CELL_SIZE
+            ws.add_image(picture,
+                         f'{openpyxl.utils.get_column_letter(picture_column)}{index}')
+            rows_with_picture.append(index)
+
+    for col in range(1, len(headers) + 1):
+        if col == picture_column:
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = \
+                PHOTO_CELL_SIZE / 7
+            continue
+        longest = max((len(str(ws.cell(row=r, column=col).value or ''))
+                       for r in range(1, ws.max_row + 1)), default=10)
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = \
+            min(longest + 2, 50)
+
+    for row in rows_with_picture:
+        ws.row_dimensions[row].height = PHOTO_CELL_SIZE * 0.78
+
+    return ws
+
+def export_categories_sheet(wb):
+    """The tree: every category as its full path, in the order it is shown."""
+    def walk(parent_id):
+        for category in ordered_children(parent_id):
+            yield category
+            yield from walk(category.id)
+
+    def rows():
+        for category in walk(None):
+            yield ([
+                category.id,
+                category_path_name(category),
+                category.sort_order or 0,
+                category.brand.name if category.brand else '',
+                category.description or '',
+            ], uploaded_file_path(category.icon))
+
+    write_sheet(wb, SHEET_CATEGORIES,
+                ['ID', 'Путь', 'Порядок', 'Бренд', 'Описание', 'Иконка'],
+                rows(), picture_column=6)
+
+def export_brands_sheet(wb):
+    def rows():
+        for brand in Brand.query.order_by(Brand.name).all():
+            yield ([brand.id, brand.name], uploaded_file_path(brand.logo))
+
+    write_sheet(wb, SHEET_BRANDS, ['ID', 'Название', 'Логотип'],
+                rows(), picture_column=3)
+
+def export_banners_sheet(wb):
+    def rows():
+        for banner in Banner.query.order_by(Banner.sort_order, Banner.id).all():
+            yield ([
+                banner.id,
+                banner.title or '',
+                banner.subtitle or '',
+                banner.link or '',
+                banner.sort_order or 0,
+                'Да' if banner.is_active else 'Нет',
+            ], uploaded_file_path(banner.image))
+
+    write_sheet(wb, SHEET_BANNERS,
+                ['ID', 'Заголовок', 'Подпись', 'Ссылка', 'Порядок', 'Показывать', 'Картинка'],
+                rows(), picture_column=7)
 
 # ===== IMPORT PROGRESS =====
 # Three hundred rows with photographs take a while, and a page that only says
@@ -1402,6 +1513,178 @@ def finish_import_job(job_id, result):
 def import_progress(job_id):
     """How far the import has got. Unknown ids answer 'not started yet'."""
     return jsonify(IMPORT_JOBS.get(job_id) or {'done': 0, 'total': 0, 'finished': False})
+
+# ===== READING THE OTHER SHEETS =====
+# Brands first: a category or a product may point at one. Then the tree, so
+# products have somewhere to land. Products last.
+
+def sheet_rows(wb, title):
+    """(row number, [values]) for each filled row of a sheet, or nothing."""
+    if title not in wb.sheetnames:
+        return
+
+    ws = wb[title]
+    for row in range(2, ws.max_row + 1):
+        values = [ws.cell(row=row, column=col).value
+                  for col in range(1, ws.max_column + 1)]
+        if any(value not in (None, '') for value in values):
+            yield row, values
+
+def cell_text(values, index):
+    if index >= len(values) or values[index] is None:
+        return ''
+    return str(values[index]).strip()
+
+def cell_number(values, index, default=0):
+    try:
+        return int(float(cell_text(values, index)))
+    except (TypeError, ValueError):
+        return default
+
+def import_brands_sheet(wb, file_bytes, report):
+    """Название and a logo.
+
+    Matched by name first and only then by id. The other way round is a trap:
+    restoring into an emptied table hands out fresh ids from one, so the row
+    that says «PNEUMAX, id 1» would claim whatever was just created as id 1 —
+    CAMOZZI — rename it, and take its logo. The name is the real key; the id
+    only tells us that a row was renamed."""
+    pictures = extract_embedded_images(file_bytes, SHEET_BRANDS)
+
+    rows = list(sheet_rows(wb, SHEET_BRANDS))
+    names_in_file = {cell_text(v, 1).lower() for _, v in rows if cell_text(v, 1)}
+    claimed = set()
+
+    for row, values in rows:
+        name = cell_text(values, 1)
+        if not name:
+            continue
+
+        brand = Brand.query.filter(db.func.lower(Brand.name) == name.lower()).first()
+
+        if not brand:
+            # An id match means a rename — but only if nothing else in the
+            # file already answers to that row's current name
+            candidate = Brand.query.get(cell_number(values, 0, 0))
+            if (candidate and candidate.id not in claimed
+                    and candidate.name.lower() not in names_in_file):
+                brand = candidate
+
+        if brand:
+            brand.name = name[:100]
+        else:
+            brand = Brand(name=name[:100])
+            db.session.add(brand)
+            report['brands_added'] += 1
+
+        db.session.flush()
+        claimed.add(brand.id)
+
+        if row in pictures:
+            data, ext = pictures[row]
+            brand.logo = save_image_bytes(f'brand{brand.id}', data, ext)
+
+    db.session.flush()
+
+def import_categories_sheet(wb, file_bytes, report):
+    """The tree, as paths. A path that does not exist yet is created."""
+    pictures = extract_embedded_images(file_bytes, SHEET_CATEGORIES)
+
+    rows = list(sheet_rows(wb, SHEET_CATEGORIES))
+    paths_in_file = {cell_text(v, 1) for _, v in rows if cell_text(v, 1)}
+    claimed = set()
+
+    # Every path once, rather than walking the whole table per row
+    by_path = {category_path_name(node): node for node in Category.query.all()}
+
+    for row, values in rows:
+        path = cell_text(values, 1)
+        if not path:
+            continue
+
+        # The path is the key; the id only says that a row was renamed, and
+        # is trusted only when nothing else in the file claims that row
+        category = by_path.get(path)
+
+        if not category:
+            candidate = Category.query.get(cell_number(values, 0, 0))
+            if (candidate and candidate.id not in claimed
+                    and category_path_name(candidate) not in paths_in_file):
+                category = candidate
+                leaf = path.split(PATH_SEPARATOR)[-1].strip()
+                if leaf:
+                    category.name = leaf[:100]
+                    db.session.flush()
+                    by_path[category_path_name(category)] = category
+
+        if not category:
+            category = resolve_category_path(path)
+            if not category:
+                continue
+            report['categories_added'] += 1
+            by_path[path] = category
+
+        claimed.add(category.id)
+
+        category.sort_order = cell_number(values, 2, category.sort_order or 0)
+
+        brand_name = cell_text(values, 3)
+        if brand_name:
+            brand = Brand.query.filter(db.func.lower(Brand.name) == brand_name.lower()).first()
+            category.brand_id = brand.id if brand else None
+        elif len(values) > 3:
+            category.brand_id = None
+
+        description = cell_text(values, 4)
+        if description:
+            category.description = description
+
+        db.session.flush()
+
+        if row in pictures:
+            data, ext = pictures[row]
+            category.icon = save_image_bytes(f'cat{category.id}', data, ext)
+
+    db.session.flush()
+
+def import_banners_sheet(wb, file_bytes, report):
+    """Slides. A row with no id and no picture cannot become one."""
+    pictures = extract_embedded_images(file_bytes, SHEET_BANNERS)
+
+    # A slide has no name to be known by, so the id is all there is — and one
+    # slide must not be claimed twice, or a restore into an emptied table
+    # would have each row overwrite the one before it
+    claimed = set()
+
+    for row, values in sheet_rows(wb, SHEET_BANNERS):
+        banner = Banner.query.get(cell_number(values, 0, 0))
+        if banner and banner.id in claimed:
+            banner = None
+
+        if not banner and row not in pictures:
+            report['errors'].append(
+                f'Слайдер, строка {row}: нет картинки — слайд не создан')
+            continue
+
+        if not banner:
+            banner = Banner(image='')
+            db.session.add(banner)
+            report['banners_added'] += 1
+
+        banner.title = cell_text(values, 1)[:200]
+        banner.subtitle = cell_text(values, 2)[:300]
+        banner.link = cell_text(values, 3)[:500]
+        banner.sort_order = cell_number(values, 4, banner.sort_order or 0)
+        banner.is_active = cell_text(values, 5).lower() not in ('нет', 'no', 'false', '0')
+
+        db.session.flush()
+        claimed.add(banner.id)
+
+        if row in pictures:
+            data, ext = pictures[row]
+            banner.image = save_image_bytes(f'banner{banner.id}', data, ext)
+
+    db.session.flush()
 
 @app.route('/api/admin/import/excel', methods=['POST'])
 @require_admin
@@ -1501,6 +1784,13 @@ def import_excel():
         imported = 0
         updated = 0
         errors = []
+
+        # Brands, then the tree, then the products that point at both
+        extras = {'brands_added': 0, 'categories_added': 0,
+                  'banners_added': 0, 'errors': errors}
+        import_brands_sheet(wb, file_bytes, extras)
+        import_categories_sheet(wb, file_bytes, extras)
+        import_banners_sheet(wb, file_bytes, extras)
 
         job_id = (request.form.get('job_id') or '').strip()
         start_import_job(job_id, max(ws.max_row - header_row, 0))
@@ -1636,10 +1926,22 @@ def import_excel():
 
         db.session.commit()
 
+        # Only mention what the file actually brought with it
+        extra_parts = [
+            f'{extras["categories_added"]} категорий' if extras['categories_added'] else '',
+            f'{extras["brands_added"]} брендов' if extras['brands_added'] else '',
+            f'{extras["banners_added"]} слайдов' if extras['banners_added'] else '',
+        ]
+        tail = ', '.join(part for part in extra_parts if part)
+
         result = {
-            'message': f'Импорт завершен: добавлено {imported}, обновлено {updated}',
+            'message': f'Импорт завершен: добавлено {imported}, обновлено {updated}'
+                       + (f'. Ещё добавлено: {tail}' if tail else ''),
             'imported': imported,
             'updated': updated,
+            'categories_added': extras['categories_added'],
+            'brands_added': extras['brands_added'],
+            'banners_added': extras['banners_added'],
             'errors': errors[:10]  # Return first 10 errors
         }
         finish_import_job(job_id, result)
