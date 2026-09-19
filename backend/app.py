@@ -826,11 +826,16 @@ def admin_categories():
         return jsonify({'error': 'Родительская категория не найдена'}), 400
 
     try:
+        brand_id = data.get('brand_id') or None
+        if brand_id and not Brand.query.get(brand_id):
+            return jsonify({'error': 'Бренд не найден'}), 400
+
         category = Category(
             name=name[:100],
             slug=make_slug(data.get('slug') or name),
             description=data.get('description', ''),
             parent_id=parent_id,
+            brand_id=brand_id,
             sort_order=next_sort_order(parent_id),
         )
         db.session.add(category)
@@ -868,6 +873,13 @@ def admin_category(category_id):
 
     if 'description' in data:
         category.description = data['description']
+
+    # Which brand's range this subcategory is shown under
+    if 'brand_id' in data:
+        brand_id = data['brand_id'] or None
+        if brand_id and not Brand.query.get(brand_id):
+            return jsonify({'error': 'Бренд не найден'}), 400
+        category.brand_id = brand_id
 
     if 'parent_id' in data:
         parent_id = data['parent_id'] or None
@@ -1854,7 +1866,8 @@ def ensure_schema():
         existing = column_names(connection, 'categories')
 
         for column, definition in (('parent_id', 'INTEGER REFERENCES categories(id)'),
-                                   ('sort_order', 'INTEGER DEFAULT 0')):
+                                   ('sort_order', 'INTEGER DEFAULT 0'),
+                                   ('brand_id', 'INTEGER REFERENCES brands(id)')):
             if column not in existing:
                 connection.exec_driver_sql(
                     f'ALTER TABLE categories ADD COLUMN {column} {definition}')

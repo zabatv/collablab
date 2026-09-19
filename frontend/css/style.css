@@ -1035,10 +1035,27 @@ header {
 /* ===== SECTION MARK =====
    A supplier's logo beside the subcategories of its section, the way a
    catalogue prints a brand at the head of its range. */
+/* One row per brand. A hairline between them, so the ranges read as
+   separate without needing a heading each. */
 .section-row {
   display: flex;
   align-items: flex-start;
   gap: var(--space-md);
+}
+
+.section-row + .section-row {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--line);
+}
+
+/* A brand with no logo yet still holds its place in the column */
+.section-mark-text {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  text-align: center;
 }
 
 .section-row .tile-grid {
@@ -1233,9 +1250,13 @@ header {
   transition: transform var(--settle) var(--ease-out);
 }
 
+/* Tiles keep their size instead of stretching to fill the row. A brand with
+   two subcategories would otherwise show two enormous tiles beside a brand
+   showing six small ones, and the rows would not read as one table. */
 .tile-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 186px));
+  justify-content: start;
   gap: var(--space-sm);
 }
 
@@ -2680,6 +2701,7 @@ footer {
 
   /* Two subcategories to a row. At the desktop minimum only one fits, and a
      phone screen filled by a single photograph tells a buyer nothing. */
+  /* On a phone two to a row is the whole width, so they do stretch */
   .tile-grid {
     grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
     gap: var(--space-xs);

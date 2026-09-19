@@ -23,6 +23,11 @@ class Category(db.Model):
     parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), index=True)
     sort_order = db.Column(db.Integer, default=0, index=True)
 
+    # Whose range this subcategory belongs to. A section lists its
+    # subcategories brand by brand, the way a printed catalogue does.
+    brand_id = db.Column(db.Integer, db.ForeignKey('brands.id'), index=True)
+    brand = db.relationship('Brand', lazy='select')
+
     children = db.relationship(
         'Category', backref=db.backref('parent', remote_side=[id]),
         lazy='select', order_by='Category.sort_order, Category.name')
@@ -48,6 +53,27 @@ class Category(db.Model):
                     return product.image
         return None
 
+    def effective_brand(self):
+        """The brand this subcategory is shown under.
+
+        Set by hand, or — when it was not — taken from the products
+        themselves: if everything in the branch carries the same brand, that
+        is the brand, and nobody has to say so twice."""
+        if self.brand:
+            return self.brand
+
+        found = None
+        for node in self.descendants():
+            for product in node.products:
+                if product.brand_id is None:
+                    return None
+                if found is None:
+                    found = product.brand
+                elif found.id != product.brand_id:
+                    return None
+
+        return found
+
     def path(self):
         """From the root down to this category, for breadcrumbs."""
         chain, node = [], self
@@ -72,6 +98,10 @@ class Category(db.Model):
             'total_count': self.total_product_count(),
             'has_children': bool(self.children),
             'image': self.icon or self.preview_image(),
+            # brand_id is what the admin set; brand is what is actually shown,
+            # which may have been worked out from the products
+            'brand_id': self.brand_id,
+            'brand': (lambda found: found.to_dict() if found else None)(self.effective_brand()),
         }
 
         if with_children:

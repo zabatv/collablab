@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261001">
+  <link rel="stylesheet" href="css/style.css?v=20261003">
 </head>
 <body>
   <!-- Header -->
@@ -145,10 +145,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20261001"></script>
-  <script src="js/main.js?v=20261001"></script>
-  <script src="js/effects.js?v=20261001"></script>
-  <script src="js/consent.js?v=20261001"></script>
+  <script src="js/api.js?v=20261003"></script>
+  <script src="js/main.js?v=20261003"></script>
+  <script src="js/effects.js?v=20261003"></script>
+  <script src="js/consent.js?v=20261003"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -458,22 +458,9 @@
       inner.dataset.filled = '1';
 
       if (category.children && category.children.length) {
-        // A section's own icon is its mark, standing beside the tiles rather
-        // than on one of them — the place a supplier's logo goes
-        const mark = category.icon ? `
-          <div class="section-mark">
-            <img src="${escapeHtml(category.icon)}" alt="${escapeHtml(category.name)}"
-                 loading="lazy">
-          </div>` : '';
-
         inner.innerHTML = `
           <div class="section-pad">
-            <div class="section-row">
-              ${mark}
-              <div class="tile-grid">
-                ${category.children.map(categoryTile).join('')}
-              </div>
-            </div>
+            ${brandRows(category)}
             <a class="section-all" href="catalog.html?category=${category.id}">
               Все ${category.total_count} товаров раздела
               <span class="section-all-arrow" aria-hidden="true">→</span>
@@ -505,6 +492,58 @@
       } catch (error) {
         grid.innerHTML = '<p class="text-muted">Не удалось загрузить товары</p>';
       }
+    }
+
+    /* A section lists its subcategories brand by brand, the way a printed
+       catalogue does: the supplier's logo on the left, its range beside it.
+       Whatever has no brand goes in a last row with nothing on the left —
+       the tiles still line up with the rows above. */
+    function brandRows(category) {
+      const groups = new Map();
+
+      category.children.forEach(child => {
+        const key = child.brand?.id ?? 'none';
+        if (!groups.has(key)) groups.set(key, { brand: child.brand || null, items: [] });
+        groups.get(key).items.push(child);
+      });
+
+      // Named brands first, alphabetically; the unbranded remainder last
+      const rows = [...groups.values()].sort((a, b) => {
+        if (!a.brand) return 1;
+        if (!b.brand) return -1;
+        return a.brand.name.localeCompare(b.brand.name, 'ru');
+      });
+
+      // A section whose subcategories share no brand keeps its own mark,
+      // and there is nothing to group
+      if (rows.length === 1 && !rows[0].brand) {
+        return sectionRow(category.icon ? { logo: category.icon, name: category.name } : null,
+                          rows[0].items, 0);
+      }
+
+      let index = 0;
+      return rows.map(row => {
+        const markup = sectionRow(row.brand, row.items, index);
+        index += row.items.length;
+        return markup;
+      }).join('');
+    }
+
+    function sectionRow(brand, items, offset) {
+      const mark = brand?.logo ? `
+        <div class="section-mark">
+          <img src="${escapeHtml(brand.logo)}" alt="${escapeHtml(brand.name)}" loading="lazy">
+        </div>`
+        : brand?.name ? `<div class="section-mark section-mark-text">${escapeHtml(brand.name)}</div>`
+        : '<div class="section-mark"></div>';
+
+      return `
+        <div class="section-row">
+          ${mark}
+          <div class="tile-grid">
+            ${items.map((child, position) => categoryTile(child, offset + position)).join('')}
+          </div>
+        </div>`;
     }
 
     // --i is the tile's place in the row: the stagger is a CSS delay, so

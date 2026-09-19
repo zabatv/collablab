@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261001">
+  <link rel="stylesheet" href="css/style.css?v=20261003">
   <style>
     .admin-layout {
       display: grid;
@@ -1831,6 +1831,15 @@
         </div>
 
         <div class="form-group">
+          <label>Бренд</label>
+          <select id="category-brand"></select>
+          <small class="text-muted">
+            На главной подкатегории раздела выстраиваются по брендам, логотип слева.
+            Если не выбирать, бренд возьмётся из товаров — когда он у всех один.
+          </small>
+        </div>
+
+        <div class="form-group">
           <label>Описание</label>
           <textarea id="category-description"></textarea>
         </div>
@@ -1907,8 +1916,8 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20261001"></script>
-  <script src="js/main.js?v=20261001"></script>
+  <script src="js/api.js?v=20261003"></script>
+  <script src="js/main.js?v=20261003"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -3535,6 +3544,24 @@
       return options;
     }
 
+    // Which brand's range this subcategory belongs to
+    async function fillCategoryBrandSelect(selectedId) {
+      const select = el('#category-brand');
+      select.innerHTML = '<option value="">— по товарам —</option>';
+
+      try {
+        const brands = await AdminAPI.getBrands();
+        brands.forEach(brand => {
+          select.innerHTML += `<option value="${brand.id}">${escapeHtml(brand.name)}</option>`;
+        });
+      } catch (error) {
+        // The rest of the form still works without the list
+        console.error(error);
+      }
+
+      select.value = selectedId ? String(selectedId) : '';
+    }
+
     function fillParentSelect(selectedId, skipId) {
       const select = el('#category-parent');
       select.innerHTML = '<option value="">— верхний уровень —</option>';
@@ -3552,6 +3579,7 @@
         parentId ? 'ДОБАВИТЬ ПОДКАТЕГОРИЮ' : 'ДОБАВИТЬ КАТЕГОРИЮ';
       el('#category-submit').textContent = 'ДОБАВИТЬ';
       fillParentSelect(parentId, null);
+      fillCategoryBrandSelect(null);
       el('#category-modal').classList.add('active');
     }
 
@@ -3564,6 +3592,7 @@
       el('#category-description').value = category.description || '';
       // Its own branch is left out of the list, or it could be moved into itself
       fillParentSelect(category.parent_id, category.id);
+      fillCategoryBrandSelect(category.brand_id);
       el('#category-modal').classList.add('active');
     }
 
@@ -3576,10 +3605,12 @@
       e.preventDefault();
 
       const parent = el('#category-parent').value;
+      const brand = el('#category-brand').value;
       const data = {
         name: el('#category-name').value,
         description: el('#category-description').value,
-        parent_id: parent ? Number(parent) : null
+        parent_id: parent ? Number(parent) : null,
+        brand_id: brand ? Number(brand) : null
       };
 
       try {
