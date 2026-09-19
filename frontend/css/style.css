@@ -314,6 +314,15 @@ header {
   letter-spacing: 0.01em;
 }
 
+/* Nothing on the strip but the numbers, so they sit at the end of it */
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
 .header-top a {
   color: #fff;
 }
@@ -1107,6 +1116,17 @@ header {
     opacity: 1;
     transform: none;
   }
+}
+
+/* The one you are already looking at, among its neighbours */
+.tile-current {
+  border-color: var(--ink);
+  box-shadow: var(--shadow-md);
+  cursor: default;
+}
+
+.tile-current .tile-name {
+  color: var(--accent);
 }
 
 .tile:active {

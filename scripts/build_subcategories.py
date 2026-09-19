@@ -70,6 +70,24 @@ RULES = {
         ('Реле давления', ('реле давления',)),
         ('Реле дифференциального давления', ('диф',)),
         ('Реле контроля напряжения', ('реле контроля',)),
+        ('Регуляторы уровня', ('уровня жидкости',)),
+        ('Преобразователи сигналов', ('преобразователь сигналов',)),
+    ],
+    'Пневмотрубки': [
+        ('Полиуретановые чёрные', ('чёрн',)),
+        ('Полиуретановые синие', ('син',)),
+    ],
+    'Контроллеры и терморегуляторы': [
+        ('ПИД-регуляторы', ('пид-регулятор',)),
+        ('Программируемые контроллеры', ('плк',)),
+        ('Терморегуляторы и термостаты', ('терморегулятор',)),
+        ('Терморегуляторы и термостаты', ('термостат',)),
+        ('Терморегуляторы и термостаты', ('реле температуры',)),
+    ],
+    # The block comes first: its name contains «фильтр-регулятор» too
+    'Подготовка воздуха': [
+        ('Блоки подготовки воздуха', ('блок подготовки',)),
+        ('Фильтры-регуляторы', ('фильтр-регулятор',)),
     ],
 }
 
@@ -99,9 +117,6 @@ def plan(session, Category, Product):
     result = []
     for section in sections:
         products = list(section.products)
-        if len(products) < SPLIT_THRESHOLD:
-            result.append((section, {}, products))
-            continue
 
         groups, leftover = {}, []
         for product in products:
@@ -111,8 +126,11 @@ def plan(session, Category, Product):
             else:
                 leftover.append(product)
 
-        # A subcategory holding one product is noise; put it back
-        for title in [t for t, items in groups.items() if len(items) < 2]:
+        # In a large section a subcategory holding one product is noise and
+        # goes back to the section. In a small one it is the whole point:
+        # a section has to show subcategories, not a heap of products.
+        smallest = 2 if len(products) >= SPLIT_THRESHOLD else 1
+        for title in [t for t, items in groups.items() if len(items) < smallest]:
             leftover.extend(groups.pop(title))
 
         result.append((section, groups, leftover))
@@ -160,10 +178,15 @@ def main():
                 print(f'   (остаётся в разделе: {len(leftover)})')
 
         if apply_changes:
-            # Sections keep the order they already had, biggest first
-            for order, (section, _, _) in enumerate(
-                    sorted(layout, key=lambda row: -sum(
-                        len(items) for items in row[1].values()) - len(row[2])), 1):
+            session.flush()
+
+            # Biggest section first — by everything in the branch, not by what
+            # happens to sit directly in the section. Counting the latter put
+            # the sections split on an earlier run at the bottom, because
+            # splitting had left them with nothing of their own.
+            for order, section in enumerate(
+                    sorted((row[0] for row in layout),
+                           key=lambda node: -node.total_product_count()), 1):
                 section.sort_order = order * 10
 
             session.commit()

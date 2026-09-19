@@ -10,15 +10,15 @@
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260924">
+  <link rel="stylesheet" href="css/style.css?v=20260925">
 </head>
 <body>
   <!-- Header -->
   <header>
     <div class="header-top">
-      <div class="container flex-between">
-        <span>Доставка по России • Отгрузка со склада</span>
+      <div class="container header-top-row">
         <a href="tel:+79034901490">8 903 490-14-90</a>
+        <a href="tel:+79389164506">8 938 916-45-06</a>
       </div>
     </div>
 
@@ -91,7 +91,7 @@
       <section>
         <!-- Subcategories of the open section, shown before its products -->
         <div id="subcategories" hidden>
-          <h2 class="subcat-heading">Подкатегории</h2>
+          <h2 class="subcat-heading" id="subcat-heading">Подкатегории</h2>
           <div class="tile-grid" id="subcategory-grid"></div>
         </div>
 
@@ -158,10 +158,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260924"></script>
-  <script src="js/main.js?v=20260924"></script>
-  <script src="js/effects.js?v=20260924"></script>
-  <script src="js/consent.js?v=20260924"></script>
+  <script src="js/api.js?v=20260925"></script>
+  <script src="js/main.js?v=20260925"></script>
+  <script src="js/effects.js?v=20260925"></script>
+  <script src="js/consent.js?v=20260925"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -312,26 +312,57 @@
       lead.hidden = !lead.textContent;
     }
 
-    // A section shows what is under it before it shows the parts themselves
+    // Finds a category anywhere in the tree already in hand, so walking up
+    // to the neighbours costs no request
+    function findInTree(id, nodes = categoryTree) {
+      for (const node of nodes) {
+        if (node.id === id) return node;
+        const found = findInTree(id, node.children || []);
+        if (found) return found;
+      }
+      return null;
+    }
+
+    /* A section shows what is under it before it shows the parts themselves.
+       A subcategory has nothing under it — there it shows the subcategories
+       beside it, with itself marked, so the neighbouring sizes and types are
+       one click away instead of a trip back to the section. */
     function renderSubcategories() {
       const block = el('#subcategories');
       const grid = el('#subcategory-grid');
-      const children = openCategory?.children || [];
+      const heading = el('#subcat-heading');
 
-      block.hidden = children.length === 0;
-      if (!children.length) return;
+      let tiles = openCategory?.children || [];
+      let title = 'Подкатегории';
+
+      if (openCategory && !tiles.length) {
+        const path = openCategory.path || [];
+        const parent = path.length > 1 ? findInTree(path[path.length - 2].id) : null;
+        tiles = parent?.children || [];
+        title = parent ? parent.name : title;
+      }
+
+      // A subcategory with no neighbours has nothing to offer here
+      block.hidden = tiles.length < 2;
+      if (block.hidden) return;
+
+      heading.textContent = title;
 
       // --i staggers the entrance; the animation is in the stylesheet
-      grid.innerHTML = children.map((child, index) => `
-        <a class="tile tile-enter" href="catalog.html?category=${child.id}"
-           style="--i: ${index}">
+      grid.innerHTML = tiles.map((child, index) => {
+        const current = child.id === openCategory?.id;
+        return `
+        <a class="tile tile-enter${current ? ' tile-current' : ''}"
+           href="catalog.html?category=${child.id}"
+           style="--i: ${index}"${current ? ' aria-current="page"' : ''}>
           <span class="tile-image">
             <img src="${escapeHtml(child.image || NO_IMAGE)}" alt=""
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
           </span>
           <span class="tile-name">${escapeHtml(child.name)}</span>
           <span class="tile-count num">${child.total_count}</span>
-        </a>`).join('');
+        </a>`;
+      }).join('');
     }
 
     async function applyFilters() {
