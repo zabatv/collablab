@@ -8,7 +8,7 @@
   <title>Товар — ROBOT</title>
   <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260923">
+  <link rel="stylesheet" href="css/style.css?v=20260924">
 </head>
 <body>
   <!-- Header -->
@@ -16,7 +16,7 @@
     <div class="header-top">
       <div class="container flex-between">
         <span>Доставка по России • Отгрузка со склада</span>
-        <a href="tel:+78001234567">8 (800) 123-45-67</a>
+        <a href="tel:+79034901490">8 903 490-14-90</a>
       </div>
     </div>
 
@@ -97,9 +97,10 @@
         <div class="footer-section">
           <h4>Контакты</h4>
           <ul>
-            <li><a href="tel:+78001234567">8 (800) 123-45-67</a></li>
-            <li><a href="mailto:info@robot.ru">info@robot.ru</a></li>
-            <li>г. Москва</li>
+            <li><a href="tel:+79034901490">8 903 490-14-90</a></li>
+            <li><a href="tel:+79389164506">8 938 916-45-06</a></li>
+            <li><a href="mailto:anzor07@bk.ru">anzor07@bk.ru</a></li>
+            <li>г. Нальчик, Наркалинское шоссе, уч. 1</li>
           </ul>
         </div>
       </div>
@@ -114,10 +115,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260923"></script>
-  <script src="js/main.js?v=20260923"></script>
-  <script src="js/effects.js?v=20260923"></script>
-  <script src="js/consent.js?v=20260923"></script>
+  <script src="js/api.js?v=20260924"></script>
+  <script src="js/main.js?v=20260924"></script>
+  <script src="js/effects.js?v=20260924"></script>
+  <script src="js/consent.js?v=20260924"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -261,7 +262,7 @@
 
             <div class="product-actions">
               <button class="btn btn-accent btn-lg" onclick="callStore()">Запросить цену и срок</button>
-              <a class="btn btn-secondary btn-lg" href="tel:+78001234567">Позвонить</a>
+              <a class="btn btn-secondary btn-lg" href="tel:+79034901490">Позвонить</a>
             </div>
 
             ${product.description ? `
@@ -433,8 +434,28 @@
       }
     }
 
+    // The site has nowhere to send a request to, so the button opens a letter
+    // the buyer sends themselves, with the position already written into it.
+    // It used to say «Запрос отправлен» while sending nothing at all.
     function callStore() {
-      showNotification('Запрос отправлен — менеджер ответит в течение рабочего дня.', 'success');
+      const product = currentProduct;
+      if (!product) return;
+
+      const subject = `Запрос цены: ${product.sku}`;
+      const body = [
+        `Здравствуйте!`,
+        ``,
+        `Интересует позиция:`,
+        `${product.name}`,
+        `Артикул: ${product.sku}`,
+        `Цена на сайте: ${formatPrice(product.price)}`,
+        ``,
+        `Нужное количество: `,
+        `Как с вами связаться: `,
+      ].join('\n');
+
+      window.location.href =
+        `mailto:anzor07@bk.ru?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     }
 
     async function handleSearch() {

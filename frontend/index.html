@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260923">
+  <link rel="stylesheet" href="css/style.css?v=20260924">
 </head>
 <body>
   <!-- Header -->
@@ -19,7 +19,7 @@
     <div class="header-top">
       <div class="container flex-between">
         <span>Доставка по России • Отгрузка со склада</span>
-        <a href="tel:+78001234567">8 (800) 123-45-67</a>
+        <a href="tel:+79034901490">8 903 490-14-90</a>
       </div>
     </div>
 
@@ -78,6 +78,10 @@
 
   <!-- Products by category -->
   <div id="featured" class="container" style="padding-block: 48px;">
+    <div class="sections-toolbar">
+      <h2 class="sections-heading">Каталог по разделам</h2>
+      <button type="button" class="sections-toggle-all" id="toggle-all" hidden></button>
+    </div>
     <div id="category-sections"></div>
   </div>
 
@@ -110,9 +114,10 @@
         <div class="footer-section">
           <h4>Контакты</h4>
           <ul>
-            <li><a href="tel:+78001234567">8 (800) 123-45-67</a></li>
-            <li><a href="mailto:info@robot.ru">info@robot.ru</a></li>
-            <li>г. Москва</li>
+            <li><a href="tel:+79034901490">8 903 490-14-90</a></li>
+            <li><a href="tel:+79389164506">8 938 916-45-06</a></li>
+            <li><a href="mailto:anzor07@bk.ru">anzor07@bk.ru</a></li>
+            <li>г. Нальчик, Наркалинское шоссе, уч. 1</li>
           </ul>
         </div>
       </div>
@@ -127,10 +132,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260923"></script>
-  <script src="js/main.js?v=20260923"></script>
-  <script src="js/effects.js?v=20260923"></script>
-  <script src="js/consent.js?v=20260923"></script>
+  <script src="js/api.js?v=20260924"></script>
+  <script src="js/main.js?v=20260924"></script>
+  <script src="js/effects.js?v=20260924"></script>
+  <script src="js/consent.js?v=20260924"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -154,9 +159,16 @@
         }
 
         clear(sections);
-        // Everything stands open: the catalogue shows what it has, and the
-        // bars are there for folding away what you are not looking at
-        filled.forEach(section => renderSection(sections, section, true));
+        sectionHandles.length = 0;
+
+        // Everything stands open unless this browser was left with something
+        // folded away: the catalogue shows what it has, and the bars are
+        // there for putting aside what you are not looking at
+        const folded = foldedSections();
+        filled.forEach(section =>
+          renderSection(sections, section, !folded.has(section.id)));
+
+        wireToggleAll();
       } catch (error) {
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
@@ -188,6 +200,34 @@
     // How long the fold takes. Must match --unfold in the stylesheet.
     const FOLD_MS = 340;
 
+    // Every section rendered on the page, so one button can drive them all
+    const sectionHandles = [];
+
+    /* ---------- what was left folded ----------
+       Only the ids of the sections put aside, and only in this browser.
+       Private mode and blocked site data both make it throw, and a
+       catalogue must open either way. */
+    const FOLD_KEY = 'folded-sections';
+
+    function foldedSections() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(FOLD_KEY) || '[]');
+        return new Set(Array.isArray(stored) ? stored : []);
+      } catch (error) {
+        return new Set();
+      }
+    }
+
+    function rememberFold(id, open) {
+      try {
+        const folded = foldedSections();
+        open ? folded.delete(id) : folded.add(id);
+        localStorage.setItem(FOLD_KEY, JSON.stringify([...folded]));
+      } catch (error) {
+        // Remembering is a convenience; losing it changes nothing
+      }
+    }
+
     // Opens or shuts a section, animating the height from the number it is
     // now to the number it will be. CSS alone could do this by moving a grid
     // row between 1fr and 0fr, but only in browsers from the last few years —
@@ -213,6 +253,42 @@
       }, FOLD_MS);
     }
 
+    // A shut bar says nothing about what is behind it, so it carries the
+    // first few names — enough to tell whether it is worth opening
+    function sectionHint(category) {
+      const names = (category.children || []).map(child => child.name);
+      if (names.length === 0) return '';
+
+      const shown = names.slice(0, 3).join(' · ');
+      return names.length > 3 ? `${shown} и ещё ${names.length - 3}` : shown;
+    }
+
+    /* ---------- one button for all of them ---------- */
+
+    function wireToggleAll() {
+      const button = el('#toggle-all');
+      if (!button || sectionHandles.length < 2) return;
+
+      button.hidden = false;
+      button.onclick = () => {
+        // Anything open means the button closes; only when everything is
+        // already shut does it open them again
+        const shouldOpen = !sectionHandles.some(section => section.isOpen());
+        sectionHandles.forEach(section => section.set(shouldOpen));
+        updateToggleAll();
+      };
+
+      updateToggleAll();
+    }
+
+    function updateToggleAll() {
+      const button = el('#toggle-all');
+      if (!button || button.hidden) return;
+
+      const anyOpen = sectionHandles.some(section => section.isOpen());
+      button.textContent = anyOpen ? 'Свернуть все' : 'Развернуть все';
+    }
+
     // A section is a bar that folds. It stands open, showing the
     // subcategories under it — names and photographs, not a wall of products.
     function renderSection(container, category, open) {
@@ -226,6 +302,7 @@
       head.innerHTML = `
         <span class="section-chevron" aria-hidden="true"></span>
         <span class="section-title">${escapeHtml(category.name)}</span>
+        <span class="section-hint">${escapeHtml(sectionHint(category))}</span>
         <span class="section-count num">${category.total_count}</span>`;
 
       const body = document.createElement('div');
@@ -244,6 +321,20 @@
         // its height has to be known before the fold starts
         if (nowOpen) fillSection(inner, category);
         foldSection(head, body, inner, nowOpen);
+        rememberFold(category.id, nowOpen);
+        updateToggleAll();
+      });
+
+      // What the button at the top of the page drives
+      sectionHandles.push({
+        id: category.id,
+        isOpen: () => body.dataset.open === 'true',
+        set(shouldOpen) {
+          if (this.isOpen() === shouldOpen) return;
+          if (shouldOpen) fillSection(inner, category);
+          foldSection(head, body, inner, shouldOpen);
+          rememberFold(category.id, shouldOpen);
+        },
       });
 
       section.append(head, body);

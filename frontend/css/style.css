@@ -880,6 +880,33 @@ header {
   box-shadow: var(--shadow-md);
 }
 
+/* The row above the sections: what they are, and the one button that opens
+   or shuts all eleven of them at once */
+.sections-toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-md);
+}
+
+.sections-heading {
+  font-size: var(--text-lg);
+}
+
+.sections-toggle-all {
+  padding: 7px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  font-weight: 620;
+  color: var(--ink-soft);
+  transition: border-color var(--quick) ease, color var(--quick) ease,
+    background-color var(--quick) ease;
+}
+
 /* A section is a bigger thing than a card, so it arrives from further down
    and settles from slightly under size */
 .section-block.reveal {
@@ -929,8 +956,29 @@ header {
 }
 
 .section-title {
+  flex: none;
+}
+
+/* The names behind a shut bar. It is there to be read at a glance, so it
+   takes the slack and gives up first when the bar runs out of room. */
+.section-hint {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity var(--quick) ease, transform var(--unfold) var(--ease-out);
+}
+
+/* Open, the bar has the whole section under it and needs no summary */
+.section-head-bar[aria-expanded="false"] .section-hint {
+  opacity: 1;
+  transform: none;
 }
 
 .section-count {
@@ -2105,6 +2153,12 @@ footer {
     background: rgba(255, 255, 255, 0.2);
   }
 
+  .sections-toggle-all:hover {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: #fff;
+  }
+
   .section-all:hover .section-all-arrow {
     transform: translateX(3px);
   }
@@ -2364,6 +2418,16 @@ footer {
   .category-section .grid {
     grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
     gap: var(--space-xs);
+  }
+
+  /* A phone bar holds the name and the count and nothing else */
+  .section-hint {
+    display: none;
+  }
+
+  .section-title {
+    flex: 1;
+    min-width: 0;
   }
 
   /* Two subcategories to a row. At the desktop minimum only one fits, and a
