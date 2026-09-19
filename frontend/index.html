@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260922">
+  <link rel="stylesheet" href="css/style.css?v=20260923">
 </head>
 <body>
   <!-- Header -->
@@ -127,10 +127,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260922"></script>
-  <script src="js/main.js?v=20260922"></script>
-  <script src="js/effects.js?v=20260922"></script>
-  <script src="js/consent.js?v=20260922"></script>
+  <script src="js/api.js?v=20260923"></script>
+  <script src="js/main.js?v=20260923"></script>
+  <script src="js/effects.js?v=20260923"></script>
+  <script src="js/consent.js?v=20260923"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -185,10 +185,36 @@
       `).join('');
     }
 
+    // How long the fold takes. Must match --unfold in the stylesheet.
+    const FOLD_MS = 340;
+
+    // Opens or shuts a section, animating the height from the number it is
+    // now to the number it will be. CSS alone could do this by moving a grid
+    // row between 1fr and 0fr, but only in browsers from the last few years —
+    // in an older one the section would simply blink shut. A measured height
+    // animates everywhere.
+    function foldSection(head, body, inner, open) {
+      body.dataset.open = String(open);
+      head.setAttribute('aria-expanded', String(open));
+
+      const from = body.getBoundingClientRect().height;
+      const to = open ? inner.scrollHeight : 0;
+
+      body.style.height = `${from}px`;
+      void body.offsetHeight;          // let the browser take the starting value
+      body.style.height = `${to}px`;
+
+      clearTimeout(body.foldTimer);
+      body.foldTimer = setTimeout(() => {
+        // Open, the height goes back to auto: a photograph that arrives late,
+        // or a phone turned on its side, must not be cut off by a number
+        // measured before either happened
+        body.style.height = open ? 'auto' : '0px';
+      }, FOLD_MS);
+    }
+
     // A section is a bar that folds. It stands open, showing the
     // subcategories under it — names and photographs, not a wall of products.
-    // The body is a grid row that goes from 1fr to 0fr, which is what lets
-    // the fold animate without anybody measuring a height.
     function renderSection(container, category, open) {
       const section = document.createElement('section');
       section.className = 'section-block reveal';
@@ -205,6 +231,8 @@
       const body = document.createElement('div');
       body.className = 'section-body';
       body.dataset.open = String(open);
+      // No animation for the state the page opens in
+      body.style.height = open ? 'auto' : '0px';
 
       const inner = document.createElement('div');
       inner.className = 'section-body-inner';
@@ -212,10 +240,10 @@
 
       head.addEventListener('click', () => {
         const nowOpen = body.dataset.open !== 'true';
-        body.dataset.open = String(nowOpen);
-        head.setAttribute('aria-expanded', String(nowOpen));
-        // A section shut on the first visit still has nothing in it
+        // A section shut on the first visit still has nothing in it, and
+        // its height has to be known before the fold starts
         if (nowOpen) fillSection(inner, category);
+        foldSection(head, body, inner, nowOpen);
       });
 
       section.append(head, body);

@@ -973,22 +973,13 @@ header {
   transform: translateY(-2px) rotate(45deg);
 }
 
-/* The fold itself. A grid row going from 1fr to 0fr animates to the content's
-   own height, so nothing has to be measured in JavaScript. */
+/* The fold itself. The height is set in pixels from JavaScript and animated
+   from there — the same effect as moving a grid row between 1fr and 0fr, but
+   without needing a browser new enough to interpolate one. */
 .section-body {
-  display: grid;
-  grid-template-rows: 1fr;
-  background: var(--surface-sunken);
-  transition: grid-template-rows var(--unfold) var(--ease-out);
-}
-
-.section-body[data-open="false"] {
-  grid-template-rows: 0fr;
-}
-
-.section-body-inner {
-  min-height: 0;
   overflow: hidden;
+  background: var(--surface-sunken);
+  transition: height var(--unfold) var(--ease-out);
 }
 
 .section-pad {
