@@ -45,18 +45,26 @@
 
   <!-- Main Content -->
   <main class="container" style="padding-block: 24px 8px;">
-    <h1 style="margin-bottom: 20px;">Каталог</h1>
+    <nav class="breadcrumbs" id="breadcrumbs" aria-label="Вы здесь"></nav>
+    <h1 id="catalog-title" style="margin-bottom: 20px;">Каталог</h1>
+    <p class="catalog-lead text-muted" id="catalog-lead" hidden></p>
 
     <div class="catalog-layout">
 
       <!-- Filters -->
       <aside class="catalog-aside" id="catalog-aside">
         <button type="button" class="btn btn-secondary filters-toggle" onclick="toggleFilters()">
-          <span>Фильтры</span>
+          <span>Категории и фильтры</span>
           <span id="filters-toggle-state">показать</span>
         </button>
 
         <div class="filters">
+
+          <!-- The catalogue tree: sections that open, subcategories inside -->
+          <div class="filter-group">
+            <h4>Каталог</h4>
+            <nav class="cat-tree" id="cat-tree"></nav>
+          </div>
 
           <!-- Sort -->
           <div class="filter-group">
@@ -69,24 +77,24 @@
             </select>
           </div>
 
-          <!-- Categories -->
-          <div class="filter-group">
-            <h4>Категории</h4>
-            <div class="filter-options" id="categories-filter"></div>
-          </div>
-
           <!-- Brands: hidden until the catalogue actually has brands -->
           <div class="filter-group" id="brands-group" style="display: none;">
             <h4>Бренды</h4>
             <div class="filter-options" id="brands-filter"></div>
           </div>
 
-          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%;">Очистить фильтры</button>
+          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%;">Показать все товары</button>
         </div>
       </aside>
 
       <!-- Products -->
       <section>
+        <!-- Subcategories of the open section, shown before its products -->
+        <div id="subcategories" hidden>
+          <h2 class="subcat-heading">Подкатегории</h2>
+          <div class="tile-grid" id="subcategory-grid"></div>
+        </div>
+
         <div class="catalog-toolbar">
           <p class="text-muted">
             Найдено: <strong class="num" id="results-count">0</strong>
@@ -157,24 +165,27 @@
     let currentPage = 1;
     let currentFilters = {};
 
+    // The whole tree, loaded once; the address bar says which node is open
+    let categoryTree = [];
+    let openCategory = null;   // the category from ?category=, with path and children
+
+    function currentCategoryId() {
+      const value = new URLSearchParams(window.location.search).get('category');
+      return value ? Number(value) : null;
+    }
+
     async function loadFilters() {
       try {
-        // Load categories
-        const categories = await ProductAPI.getCategories();
-        const categoriesFilter = el('#categories-filter');
-        clear(categoriesFilter);
+        categoryTree = await ProductAPI.getCategories();
 
-        categories.forEach(category => {
-          categoriesFilter.innerHTML += `
-            <div class="filter-option">
-              <input type="checkbox" id="cat-${category.id}" value="${category.id}" onchange="applyFilters()">
-              <label for="cat-${category.id}">${escapeHtml(category.name)}</label>
-              <span class="filter-count">${category.product_count}</span>
-            </div>
-          `;
-        });
+        const id = currentCategoryId();
+        // The full node, so breadcrumbs and subcategory tiles have their names
+        openCategory = id ? await ProductAPI.getCategory(id).catch(() => null) : null;
 
-        // Load brands
+        renderTree();
+        renderHeading();
+        renderSubcategories();
+
         const brands = await ProductAPI.getBrands();
         const brandsFilter = el('#brands-filter');
         clear(brandsFilter);
@@ -188,22 +199,141 @@
             </div>
           `;
         });
-
-        // Check URL params
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('category')) {
-          const cat = el(`#cat-${params.get('category')}`);
-          if (cat) cat.checked = true;
-        }
       } catch (error) {
         console.error('Error loading filters:', error);
       }
     }
 
+    // Every id on the path from the root down to the open category: those are
+    // the branches that must be unfolded when the page arrives
+    function openPathIds() {
+      return new Set((openCategory?.path || []).map(node => node.id));
+    }
+
+    function renderTree() {
+      const tree = el('#cat-tree');
+      clear(tree);
+
+      const all = document.createElement('a');
+      all.className = 'cat-tree-all' + (openCategory ? '' : ' active');
+      all.href = 'catalog.html';
+      all.textContent = 'Все товары';
+      tree.appendChild(all);
+
+      const unfolded = openPathIds();
+      categoryTree.forEach(section => tree.appendChild(treeNode(section, unfolded)));
+    }
+
+    // One row of the tree. A category with subcategories gets a chevron that
+    // folds them away; the name itself always opens the category.
+    function treeNode(category, unfolded) {
+      const node = document.createElement('div');
+      node.className = 'cat-node';
+
+      const row = document.createElement('div');
+      row.className = 'cat-row' + (category.id === openCategory?.id ? ' active' : '');
+
+      const children = category.children || [];
+      const open = unfolded.has(category.id);
+
+      if (children.length) {
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'cat-toggle';
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.setAttribute('aria-label', `Развернуть ${category.name}`);
+        row.appendChild(toggle);
+
+        toggle.addEventListener('click', () => {
+          const nowOpen = toggle.getAttribute('aria-expanded') !== 'true';
+          toggle.setAttribute('aria-expanded', String(nowOpen));
+          list.hidden = !nowOpen;
+        });
+      } else {
+        row.appendChild(Object.assign(document.createElement('span'),
+          { className: 'cat-toggle cat-toggle-empty' }));
+      }
+
+      const link = document.createElement('a');
+      link.className = 'cat-link';
+      link.href = `catalog.html?category=${category.id}`;
+      link.textContent = category.name;
+      row.appendChild(link);
+
+      const count = document.createElement('span');
+      count.className = 'cat-count num';
+      count.textContent = category.total_count;
+      row.appendChild(count);
+
+      node.appendChild(row);
+
+      const list = document.createElement('div');
+      list.className = 'cat-children';
+      list.hidden = !open;
+      children.forEach(child => list.appendChild(treeNode(child, unfolded)));
+      if (children.length) node.appendChild(list);
+
+      return node;
+    }
+
+    function renderHeading() {
+      const crumbs = el('#breadcrumbs');
+      const title = el('#catalog-title');
+      const lead = el('#catalog-lead');
+      clear(crumbs);
+
+      const trail = [{ name: 'Каталог', href: 'catalog.html' }].concat(
+        (openCategory?.path || []).map(node => ({
+          name: node.name, href: `catalog.html?category=${node.id}` })));
+
+      trail.forEach((step, index) => {
+        const last = index === trail.length - 1;
+        const item = document.createElement(last ? 'span' : 'a');
+        item.className = 'crumb' + (last ? ' crumb-current' : '');
+        if (!last) item.href = step.href;
+        item.textContent = step.name;
+        crumbs.appendChild(item);
+
+        if (!last) {
+          const sep = document.createElement('span');
+          sep.className = 'crumb-sep';
+          sep.textContent = '/';
+          crumbs.appendChild(sep);
+        }
+      });
+
+      title.textContent = openCategory ? openCategory.name : 'Каталог';
+      document.title = openCategory
+        ? `${openCategory.name} — каталог ROBOT`
+        : 'Каталог пневматики и автоматики — ROBOT';
+
+      lead.textContent = openCategory?.description || '';
+      lead.hidden = !lead.textContent;
+    }
+
+    // A section shows what is under it before it shows the parts themselves
+    function renderSubcategories() {
+      const block = el('#subcategories');
+      const grid = el('#subcategory-grid');
+      const children = openCategory?.children || [];
+
+      block.hidden = children.length === 0;
+      if (!children.length) return;
+
+      grid.innerHTML = children.map(child => `
+        <a class="tile" href="catalog.html?category=${child.id}">
+          <span class="tile-image">
+            <img src="${escapeHtml(child.image || NO_IMAGE)}" alt=""
+                 loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
+          </span>
+          <span class="tile-name">${escapeHtml(child.name)}</span>
+          <span class="tile-count num">${child.total_count}</span>
+        </a>`).join('');
+    }
+
     async function applyFilters() {
       currentPage = 1;
 
-      const selectedCategories = elAll('#categories-filter input:checked');
       const selectedBrands = elAll('#brands-filter input:checked');
       const sort = el('#sort-select').value;
 
@@ -219,8 +349,10 @@
         currentFilters.search = query;
       }
 
-      if (selectedCategories.length === 1) {
-        currentFilters.category_id = selectedCategories[0].value;
+      // The backend counts the whole branch, so a section shows its
+      // subcategories' products too
+      if (openCategory) {
+        currentFilters.category_id = openCategory.id;
       }
       if (selectedBrands.length === 1) {
         currentFilters.brand_id = selectedBrands[0].value;
@@ -268,9 +400,9 @@
       const query = el('#search-input').value.trim();
       if (query.length >= 2) parts.push(`запрос «${query}»`);
 
-      elAll('#categories-filter input:checked').forEach(input => {
-        parts.push(input.nextElementSibling.textContent);
-      });
+      if (openCategory) {
+        parts.push((openCategory.path || []).map(node => node.name).join(' → '));
+      }
 
       el('#active-filter').textContent = parts.length ? parts.join(' · ') : '';
     }
@@ -320,11 +452,9 @@
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    // Dropping the category means leaving it, so the address has to change too
     function resetFilters() {
-      elAll('#categories-filter input').forEach(cb => cb.checked = false);
-      elAll('#brands-filter input').forEach(cb => cb.checked = false);
-      el('#sort-select').value = 'newest';
-      applyFilters();
+      window.location.href = 'catalog.html';
     }
 
     async function handleSearch() {

@@ -874,6 +874,90 @@
       right: 24px;
     }
 
+    /* ===== CATEGORY TREE =====
+       Sections and the subcategories under them, with the arrows that decide
+       which of them stands at the top of the catalogue and which at the
+       bottom. */
+    .cat-admin-node {
+      margin-bottom: 6px;
+    }
+
+    .cat-admin-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+    }
+
+    .cat-admin-section {
+      background: #f7f8fa;
+      border-color: #d7dadf;
+    }
+
+    .cat-admin-order {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex: none;
+    }
+
+    .cat-admin-arrow {
+      width: 26px;
+      height: 20px;
+      padding: 0;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      color: #454b54;
+    }
+
+    .cat-admin-arrow:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    .cat-admin-title {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 14px;
+    }
+
+    .cat-admin-title .text-muted {
+      font-size: 12px;
+    }
+
+    .cat-admin-actions {
+      display: flex;
+      gap: 6px;
+      flex: none;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .cat-admin-btn {
+      padding: 6px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .cat-admin-btn-danger {
+      color: #b3261e;
+      border-color: #e4bdba;
+    }
+
     /* ===== PHONE =====
        The panel was desktop-only: a fixed sidebar beside a seven-column table.
        On a phone that widened the layout viewport until the whole page was
@@ -1034,6 +1118,35 @@
         border: 1px solid var(--line);
       }
 
+      /* The tree keeps its shape on a phone, but the buttons drop onto a
+         line of their own so they stay wide enough to hit */
+      .cat-admin-node {
+        margin-left: 0 !important;
+      }
+
+      .cat-admin-node .cat-admin-node .cat-admin-row {
+        margin-left: 16px;
+      }
+
+      .cat-admin-row {
+        flex-wrap: wrap;
+      }
+
+      .cat-admin-actions {
+        width: 100%;
+        justify-content: stretch;
+      }
+
+      .cat-admin-btn {
+        flex: 1;
+        min-height: 40px;
+      }
+
+      .cat-admin-arrow {
+        width: 34px;
+        height: 26px;
+      }
+
       /* A dialog on a phone is a sheet: it comes up from the bottom edge and
          keeps its own scroll instead of dragging the page behind it */
       .modal {
@@ -1139,10 +1252,17 @@
       <section class="admin-section" id="categories-section">
         <div class="admin-header">
           <h1>КАТЕГОРИИ</h1>
-          <button class="btn btn-primary" onclick="openAddCategoryModal()">ДОБАВИТЬ КАТЕГОРИЮ</button>
+          <button class="btn btn-primary" onclick="openAddCategoryModal()">ДОБАВИТЬ РАЗДЕЛ</button>
         </div>
 
-        <div id="categories-list"></div>
+        <p class="text-muted" style="margin-bottom: 16px; max-width: 70ch;">
+          Стрелки ↑ и ↓ двигают категорию внутри её уровня — так решается,
+          что стоит наверху каталога, а что внизу. «+ Подкатегория» добавляет
+          вложенную категорию, «Изменить» — переименовывает или переносит
+          под другой раздел.
+        </p>
+
+        <div id="categories-list" class="cat-admin"></div>
       </section>
 
       <!-- Brands Section -->
@@ -1292,11 +1412,11 @@
     </div>
   </div>
 
-  <!-- Add Category Modal -->
+  <!-- Category Modal: the same form adds a category and edits one -->
   <div class="modal" id="category-modal">
     <div class="modal-content">
       <span class="modal-close" onclick="closeCategoryModal()">&times;</span>
-      <h2>ДОБАВИТЬ КАТЕГОРИЮ</h2>
+      <h2 id="category-modal-title">ДОБАВИТЬ КАТЕГОРИЮ</h2>
 
       <form id="category-form" class="admin-form" style="margin-top: 24px;">
         <div class="form-group">
@@ -1305,11 +1425,17 @@
         </div>
 
         <div class="form-group">
+          <label>Внутри раздела</label>
+          <select id="category-parent"></select>
+          <small class="text-muted">«— верхний уровень —» делает из неё раздел каталога</small>
+        </div>
+
+        <div class="form-group">
           <label>Описание</label>
           <textarea id="category-description"></textarea>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%;">ДОБАВИТЬ</button>
+        <button type="submit" class="btn btn-primary" style="width: 100%;" id="category-submit">ДОБАВИТЬ</button>
       </form>
     </div>
   </div>
@@ -1897,11 +2023,13 @@
 
     async function loadCategoriesForSelect() {
       try {
-        const categories = await AdminAPI.getCategories();
+        categoryTree = await AdminAPI.getCategories();
         const select = el('#product-category');
         select.innerHTML = '<option value="">Выберите категорию</option>';
-        categories.forEach(cat => {
-          select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+        // Indented, so a товар can be put straight into a subcategory
+        categoryOptions(categoryTree).forEach(option => {
+          select.innerHTML +=
+            `<option value="${option.id}">${escapeHtml(option.name)}</option>`;
         });
       } catch (error) {
         reportFailure('Не удалось загрузить категории', error);
@@ -2542,52 +2670,202 @@
       }
     }
 
-    // Categories
+    // ===== Categories: the catalogue tree =====
+    // The tree as the server last gave it, so moving rows around does not
+    // need a round trip for every arrow
+    let categoryTree = [];
+    let editingCategoryId = null;
+
     async function loadCategories() {
       try {
-        const categories = await AdminAPI.getCategories();
+        categoryTree = await AdminAPI.getCategories();
         const list = el('#categories-list');
         clear(list);
 
-        categories.forEach(cat => {
-          list.innerHTML += `
-            <div style="padding: 16px; border: 1px solid var(--color-border); border-radius: 4px; margin-bottom: 12px;">
-              <h4>${cat.name}</h4>
-              <p class="text-muted">${cat.product_count} товаров</p>
-            </div>
-          `;
-        });
+        if (!categoryTree.length) {
+          list.innerHTML = '<p class="text-muted">Пока ни одной категории.</p>';
+          return;
+        }
+
+        categoryTree.forEach((section, index) =>
+          list.appendChild(categoryRow(section, categoryTree, index, 0)));
       } catch (error) {
         reportFailure('Не удалось загрузить категории', error);
         el('#categories-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
     }
 
-    function openAddCategoryModal() {
+    // One category and everything under it. `siblings` and `index` are what
+    // the arrows need: a category only moves among its own level.
+    function categoryRow(category, siblings, index, depth) {
+      const node = document.createElement('div');
+      node.className = 'cat-admin-node';
+      node.style.marginLeft = depth ? '28px' : '0';
+
+      const row = document.createElement('div');
+      row.className = 'cat-admin-row' + (depth ? '' : ' cat-admin-section');
+
+      const order = document.createElement('div');
+      order.className = 'cat-admin-order';
+      order.append(
+        arrowButton('↑', index === 0, () => moveCategory(siblings, index, -1)),
+        arrowButton('↓', index === siblings.length - 1, () => moveCategory(siblings, index, 1)));
+      row.appendChild(order);
+
+      const title = document.createElement('div');
+      title.className = 'cat-admin-title';
+      title.innerHTML = `
+        <strong>${escapeHtml(category.name)}</strong>
+        <span class="text-muted">${categoryCounts(category)}</span>`;
+      row.appendChild(title);
+
+      const actions = document.createElement('div');
+      actions.className = 'cat-admin-actions';
+      actions.append(
+        smallButton('+ Подкатегория', () => openAddCategoryModal(category.id)),
+        smallButton('Изменить', () => openEditCategoryModal(category)),
+        smallButton('Удалить', () => removeCategory(category), 'danger'));
+      row.appendChild(actions);
+
+      node.appendChild(row);
+
+      (category.children || []).forEach((child, childIndex) =>
+        node.appendChild(categoryRow(child, category.children, childIndex, depth + 1)));
+
+      return node;
+    }
+
+    // Its own products, and the branch total when they differ
+    function categoryCounts(category) {
+      if (category.children && category.children.length) {
+        return `${category.total_count} товаров в разделе` +
+               (category.product_count ? `, из них ${category.product_count} без подкатегории` : '');
+      }
+      return `${category.product_count} товаров`;
+    }
+
+    function arrowButton(label, disabled, onClick) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cat-admin-arrow';
+      button.textContent = label;
+      button.disabled = disabled;
+      button.onclick = onClick;
+      return button;
+    }
+
+    function smallButton(label, onClick, variant = '') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cat-admin-btn' + (variant ? ` cat-admin-btn-${variant}` : '');
+      button.textContent = label;
+      button.onclick = onClick;
+      return button;
+    }
+
+    // Swaps two neighbours and stores the whole row's new order
+    async function moveCategory(siblings, index, step) {
+      const target = index + step;
+      if (target < 0 || target >= siblings.length) return;
+
+      [siblings[index], siblings[target]] = [siblings[target], siblings[index]];
+
+      try {
+        await AdminAPI.reorderCategories(siblings.map(item => item.id));
+        loadCategories();
+      } catch (error) {
+        reportFailure('Не удалось сохранить порядок', error);
+        loadCategories();
+      }
+    }
+
+    async function removeCategory(category) {
+      if (!confirm(`Удалить категорию «${category.name}»?`)) return;
+
+      try {
+        await AdminAPI.deleteCategory(category.id);
+        showNotification('Категория удалена');
+        loadCategories();
+        loadCategoriesForSelect();
+      } catch (error) {
+        // The server refuses while the category still holds products or
+        // subcategories, and says which — pass that on as it is
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    // Every category as one indented list, for the «внутри раздела» select
+    function categoryOptions(nodes, depth = 0, skipId = null) {
+      let options = [];
+      nodes.forEach(node => {
+        if (node.id === skipId) return;   // nothing may be moved into itself
+        options.push({ id: node.id, name: '— '.repeat(depth) + node.name });
+        options = options.concat(categoryOptions(node.children || [], depth + 1, skipId));
+      });
+      return options;
+    }
+
+    function fillParentSelect(selectedId, skipId) {
+      const select = el('#category-parent');
+      select.innerHTML = '<option value="">— верхний уровень —</option>';
+      categoryOptions(categoryTree, 0, skipId).forEach(option => {
+        select.innerHTML +=
+          `<option value="${option.id}">${escapeHtml(option.name)}</option>`;
+      });
+      select.value = selectedId ? String(selectedId) : '';
+    }
+
+    function openAddCategoryModal(parentId = null) {
+      editingCategoryId = null;
       el('#category-form').reset();
+      el('#category-modal-title').textContent =
+        parentId ? 'ДОБАВИТЬ ПОДКАТЕГОРИЮ' : 'ДОБАВИТЬ КАТЕГОРИЮ';
+      el('#category-submit').textContent = 'ДОБАВИТЬ';
+      fillParentSelect(parentId, null);
+      el('#category-modal').classList.add('active');
+    }
+
+    function openEditCategoryModal(category) {
+      editingCategoryId = category.id;
+      el('#category-form').reset();
+      el('#category-modal-title').textContent = 'ИЗМЕНИТЬ КАТЕГОРИЮ';
+      el('#category-submit').textContent = 'СОХРАНИТЬ';
+      el('#category-name').value = category.name;
+      el('#category-description').value = category.description || '';
+      // Its own branch is left out of the list, or it could be moved into itself
+      fillParentSelect(category.parent_id, category.id);
       el('#category-modal').classList.add('active');
     }
 
     function closeCategoryModal() {
       el('#category-modal').classList.remove('active');
+      editingCategoryId = null;
     }
 
     el('#category-form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
+      const parent = el('#category-parent').value;
       const data = {
         name: el('#category-name').value,
-        description: el('#category-description').value
+        description: el('#category-description').value,
+        parent_id: parent ? Number(parent) : null
       };
 
       try {
-        await AdminAPI.createCategory(data);
-        showNotification('Категория добавлена');
+        if (editingCategoryId) {
+          await AdminAPI.updateCategory(editingCategoryId, data);
+          showNotification('Категория изменена');
+        } else {
+          await AdminAPI.createCategory(data);
+          showNotification('Категория добавлена');
+        }
+
         loadCategories();
         loadCategoriesForSelect();
         closeCategoryModal();
       } catch (error) {
-        showNotification('Ошибка: ' + error.message, 'error');
+        showNotification(failureText(error), 'error');
       }
     });
 

@@ -141,7 +141,14 @@ const ProductAPI = {
 
   search: (query) => apiCall(`/products/search?q=${encodeURIComponent(query)}`),
 
+  // The tree: every section with its subcategories nested inside
   getCategories: () => apiCall('/categories'),
+
+  // One flat list, when a screen only needs the names
+  getCategoriesFlat: () => apiCall('/categories?flat=1'),
+
+  // A category with its children and the path back to the root
+  getCategory: (id) => apiCall(`/categories/${id}`),
 
   getBrands: () => apiCall('/brands')
 };
@@ -224,6 +231,34 @@ const AdminAPI = {
       method: 'POST',
       headers,
       body: data
+    });
+  },
+
+  // Rename a category, or move it under another one
+  updateCategory: (id, data) => {
+    const headers = authHeader();
+    return apiCall(`/admin/categories/${id}`, {
+      method: 'PUT',
+      headers,
+      body: data
+    });
+  },
+
+  deleteCategory: (id) => {
+    const headers = authHeader();
+    return apiCall(`/admin/categories/${id}`, {
+      method: 'DELETE',
+      headers
+    });
+  },
+
+  // The order of one row of siblings, top to bottom
+  reorderCategories: (ids) => {
+    const headers = authHeader();
+    return apiCall('/admin/categories/order', {
+      method: 'PUT',
+      headers,
+      body: { ids }
     });
   },
 
