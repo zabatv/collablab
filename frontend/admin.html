@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261003">
+  <link rel="stylesheet" href="css/style.css?v=20261004">
   <style>
     .admin-layout {
       display: grid;
@@ -1243,6 +1243,19 @@
       height: 44px;
     }
 
+    /* The same wordmark the site draws when a brand has no picture */
+    .brand-wordmark {
+      padding: 0 4px;
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      line-height: 1.15;
+      text-transform: uppercase;
+      color: #454b54;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
     .brand-text {
       flex: 1;
       min-width: 0;
@@ -1916,8 +1929,8 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20261003"></script>
-  <script src="js/main.js?v=20261003"></script>
+  <script src="js/api.js?v=20261004"></script>
+  <script src="js/main.js?v=20261004"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -3675,14 +3688,18 @@
       return row;
     }
 
+    // Either a picture or the name: the square shows exactly what the site
+    // will put beside the brand's row, so there is no guessing
     function brandLogoButton(brand) {
       const wrap = document.createElement('label');
       wrap.className = 'cat-admin-icon brand-logo' + (brand.logo ? ' has-icon' : '');
-      wrap.title = brand.logo ? 'Заменить логотип' : 'Загрузить логотип';
+      wrap.title = brand.logo
+        ? 'Заменить логотип'
+        : 'Без картинки бренд выводится названием. Щёлкните, чтобы загрузить логотип';
 
       wrap.innerHTML = brand.logo
         ? `<img src="${escapeHtml(brand.logo)}" alt="">`
-        : '<span class="cat-admin-icon-empty">Логотип</span>';
+        : `<span class="brand-wordmark">${escapeHtml(brand.name)}</span>`;
 
       const input = document.createElement('input');
       input.type = 'file';

@@ -1049,13 +1049,17 @@ header {
   border-top: 1px solid var(--line);
 }
 
-/* A brand with no logo yet still holds its place in the column */
+/* Either a picture or the name — a brand with no logo is set as a wordmark
+   rather than left blank, and stands in the same place a logo would */
 .section-mark-text {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: var(--text-md);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
   color: var(--ink-soft);
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .section-row .tile-grid {
