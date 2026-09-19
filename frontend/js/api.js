@@ -108,7 +108,12 @@ async function apiCall(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-      throw new Error(`API Error: ${response.status}`);
+      // The server explains itself — «Сначала удалите или перенесите
+      // подкатегории», «В категории 37 товаров». Throwing away that text
+      // and showing the bare status code left the admin staring at
+      // «API Error» with no idea what to do about it.
+      const details = await response.json().catch(() => null);
+      throw new Error(details?.error || `Сервер ответил ошибкой ${response.status}`);
     }
 
     // Handle empty response
@@ -153,7 +158,10 @@ const ProductAPI = {
   // A category with its children and the path back to the root
   getCategory: (id) => apiCall(`/categories/${id}`),
 
-  getBrands: () => apiCall('/brands')
+  getBrands: () => apiCall('/brands'),
+
+  // The slides on the home page
+  getBanners: () => apiCall('/banners')
 };
 
 // Admin API
@@ -253,6 +261,51 @@ const AdminAPI = {
       method: 'DELETE',
       headers
     });
+  },
+
+  // The picture on a category's tile, instead of one borrowed from a product
+  uploadCategoryIcon: (id, file, onProgress) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    return uploadWithProgress(
+      `${API_BASE}/admin/categories/${id}/upload-icon`, formData, onProgress);
+  },
+
+  clearCategoryIcon: (id) => {
+    const headers = authHeader();
+    return apiCall(`/admin/categories/${id}/upload-icon`, {
+      method: 'DELETE',
+      headers
+    });
+  },
+
+  // ----- banners -----
+
+  getBanners: () => apiCall('/admin/banners', { headers: authHeader() }),
+
+  createBanner: (file, fields = {}, onProgress) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    Object.entries(fields).forEach(([name, value]) =>
+      formData.append(name, value ?? ''));
+
+    return uploadWithProgress(`${API_BASE}/admin/banners`, formData, onProgress);
+  },
+
+  updateBanner: (id, data) => {
+    const headers = authHeader();
+    return apiCall(`/admin/banners/${id}`, { method: 'PUT', headers, body: data });
+  },
+
+  deleteBanner: (id) => {
+    const headers = authHeader();
+    return apiCall(`/admin/banners/${id}`, { method: 'DELETE', headers });
+  },
+
+  reorderBanners: (ids) => {
+    const headers = authHeader();
+    return apiCall('/admin/banners/order', { method: 'PUT', headers, body: { ids } });
   },
 
   // The order of one row of siblings, top to bottom

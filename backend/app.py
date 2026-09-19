@@ -3,7 +3,7 @@ from flask_cors import CORS
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from models import (db, Product, Category, Brand, ProductImage, ProductVideo,
-                    Specification, ProductView, SearchQuery)
+                    Specification, ProductView, SearchQuery, Banner)
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
@@ -826,6 +826,39 @@ def admin_category(category_id):
     db.session.commit()
     return jsonify(category.to_dict())
 
+@app.route('/api/admin/categories/<int:category_id>/upload-icon', methods=['POST', 'DELETE'])
+@require_admin
+def upload_category_icon(category_id):
+    """The picture on a category's tile.
+
+    Without one the tile borrows a photograph from the first product in the
+    branch, which is a guess. This is how the admin says which picture it
+    should be — a brand mark for a section, a drawing of the part for a
+    subcategory."""
+    category = Category.query.get_or_404(category_id)
+
+    if request.method == 'DELETE':
+        category.icon = None
+        db.session.commit()
+        return jsonify(category.to_dict())
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'Файл не передан'}), 400
+
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    try:
+        category.icon = save_upload(file, f'cat{category_id}', IMAGE_EXTENSIONS)
+        db.session.commit()
+        return jsonify(category.to_dict()), 201
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+
 @app.route('/api/admin/categories/order', methods=['PUT'])
 @require_admin
 def admin_categories_order():
@@ -845,6 +878,90 @@ def admin_categories_order():
 
     db.session.commit()
     return jsonify({'updated': len(categories)})
+
+# ===== BANNERS =====
+# The slideshow at the top of the home page: news, an offer, a new product.
+
+@app.route('/api/banners', methods=['GET'])
+def get_banners():
+    """The slides a visitor sees, in the order the admin arranged them"""
+    banners = (Banner.query.filter_by(is_active=True)
+               .order_by(Banner.sort_order, Banner.id).all())
+    return jsonify([banner.to_dict() for banner in banners])
+
+@app.route('/api/admin/banners', methods=['GET', 'POST'])
+@require_admin
+def admin_banners():
+    """Every slide, hidden ones included — or a new one from an uploaded file"""
+    if request.method == 'GET':
+        banners = Banner.query.order_by(Banner.sort_order, Banner.id).all()
+        return jsonify([banner.to_dict() for banner in banners])
+
+    if 'image' not in request.files:
+        return jsonify({'error': 'Картинка обязательна — она и есть слайд'}), 400
+
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    try:
+        last = (db.session.query(db.func.max(Banner.sort_order)).scalar() or 0)
+        banner = Banner(
+            image=save_upload(file, 'banner', IMAGE_EXTENSIONS),
+            title=(request.form.get('title') or '').strip()[:200],
+            subtitle=(request.form.get('subtitle') or '').strip()[:300],
+            link=(request.form.get('link') or '').strip()[:500],
+            sort_order=last + 10,
+        )
+        db.session.add(banner)
+        db.session.commit()
+        return jsonify(banner.to_dict()), 201
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    except Exception as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
+
+@app.route('/api/admin/banners/<int:banner_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def admin_banner(banner_id):
+    """Change a slide's text, show or hide it, or remove it"""
+    banner = Banner.query.get_or_404(banner_id)
+
+    if request.method == 'DELETE':
+        db.session.delete(banner)
+        db.session.commit()
+        return '', 204
+
+    data = request.get_json() or {}
+    for field, limit in (('title', 200), ('subtitle', 300), ('link', 500)):
+        if field in data:
+            setattr(banner, field, str(data[field] or '').strip()[:limit])
+
+    if 'is_active' in data:
+        banner.is_active = bool(data['is_active'])
+
+    db.session.commit()
+    return jsonify(banner.to_dict())
+
+@app.route('/api/admin/banners/order', methods=['PUT'])
+@require_admin
+def admin_banners_order():
+    """Store the order the admin moved the slides into"""
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list):
+        return jsonify({'error': 'Ожидается список id в нужном порядке'}), 400
+
+    banners = {banner.id: banner for banner
+               in Banner.query.filter(Banner.id.in_(ids)).all()}
+
+    for position, banner_id in enumerate(ids):
+        if banner_id in banners:
+            banners[banner_id].sort_order = (position + 1) * 10
+
+    db.session.commit()
+    return jsonify({'updated': len(banners)})
 
 @app.route('/api/admin/brands', methods=['GET', 'POST'])
 @require_admin

@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260925">
+  <link rel="stylesheet" href="css/style.css?v=20260928">
   <style>
     .admin-layout {
       display: grid;
@@ -958,6 +958,151 @@
       border-color: #e4bdba;
     }
 
+    /* The category's picture, uploaded by clicking it */
+    .cat-admin-icon {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px dashed var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .cat-admin-icon.has-icon {
+      border-style: solid;
+    }
+
+    .cat-admin-icon img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      mix-blend-mode: multiply;
+    }
+
+    .cat-admin-icon-empty {
+      font-size: 10px;
+      color: var(--ink-muted);
+      text-align: center;
+      line-height: 1.1;
+    }
+
+    .cat-admin-icon-clear {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border: 0;
+      border-radius: 0 6px 0 6px;
+      background: rgba(20, 22, 26, 0.72);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    /* ===== BANNERS ===== */
+    .banner-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+      padding: 16px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: #f7f8fa;
+    }
+
+    .banner-form-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .banner-form input[type="text"] {
+      flex: 1;
+      min-width: 220px;
+      padding: 9px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+    }
+
+    .banner-file {
+      flex: 1;
+      min-width: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 9px 12px;
+      border: 1px dashed var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .banner-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .banner-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    /* A hidden slide stays in the list, greyed, so it can be brought back */
+    .banner-hidden {
+      opacity: 0.5;
+    }
+
+    .banner-preview {
+      flex: none;
+      width: 120px;
+      height: 46px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #f2f3f5;
+    }
+
+    .banner-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .banner-text {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: 14px;
+    }
+
+    .banner-text .text-muted {
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     /* ===== PHONE =====
        The panel was desktop-only: a fixed sidebar beside a seven-column table.
        On a phone that widened the layout viewport until the whole page was
@@ -1147,6 +1292,19 @@
         height: 26px;
       }
 
+      .banner-row {
+        flex-wrap: wrap;
+      }
+
+      .banner-preview {
+        width: 90px;
+        height: 36px;
+      }
+
+      .banner-text {
+        flex-basis: 140px;
+      }
+
       /* A dialog on a phone is a sheet: it comes up from the bottom edge and
          keeps its own scroll instead of dragging the page behind it */
       .modal {
@@ -1201,6 +1359,7 @@
       <nav style="position: relative; height: calc(100vh - 200px);">
         <div class="nav-item active" onclick="switchTab('products')">Товары</div>
         <div class="nav-item" onclick="switchTab('categories')">Категории</div>
+        <div class="nav-item" onclick="switchTab('banners')">Слайдер</div>
         <div class="nav-item" onclick="switchTab('brands')">Бренды</div>
         <div class="nav-item" onclick="switchTab('seo')">SEO</div>
 
@@ -1263,6 +1422,40 @@
         </p>
 
         <div id="categories-list" class="cat-admin"></div>
+      </section>
+
+      <!-- Banners Section -->
+      <section class="admin-section" id="banners-section">
+        <div class="admin-header">
+          <h1>СЛАЙДЕР НА ГЛАВНОЙ</h1>
+        </div>
+
+        <p class="text-muted" style="margin-bottom: 16px; max-width: 74ch;">
+          Слайды показываются в самом верху главной страницы: новости, акции,
+          новинки. Картинка — это и есть слайд; заголовок и строчка под ним
+          рисуются поверх её низа и могут быть пустыми, если надпись уже
+          нанесена на картинку. Ссылка не обязательна — без неё слайд просто
+          не кликается. Ширина картинки от 1600 px, пропорции примерно 4:1.
+          Пока не добавлено ни одного слайда, на главной остаётся обычная
+          шапка с заголовком.
+        </p>
+
+        <form id="banner-form" class="banner-form">
+          <div class="banner-form-row">
+            <label class="banner-file">
+              <input type="file" id="banner-image" accept="image/*" required hidden>
+              <span id="banner-file-label">Выбрать картинку</span>
+            </label>
+            <input type="text" id="banner-title" placeholder="Заголовок (не обязательно)" maxlength="200">
+          </div>
+          <div class="banner-form-row">
+            <input type="text" id="banner-subtitle" placeholder="Строчка под заголовком (не обязательно)" maxlength="300">
+            <input type="text" id="banner-link" placeholder="Ссылка, например catalog.html?category=2" maxlength="500">
+          </div>
+          <button type="submit" class="btn btn-primary" id="banner-submit">ДОБАВИТЬ СЛАЙД</button>
+        </form>
+
+        <div id="banners-list" class="banner-list"></div>
       </section>
 
       <!-- Brands Section -->
@@ -1457,8 +1650,8 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20260925"></script>
-  <script src="js/main.js?v=20260925"></script>
+  <script src="js/api.js?v=20260928"></script>
+  <script src="js/main.js?v=20260928"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -1488,6 +1681,7 @@
       // Load data
       if (tab === 'categories') loadCategories();
       if (tab === 'brands') loadBrands();
+      if (tab === 'banners') loadBanners();
       if (tab === 'seo') loadSeo();
     }
 
@@ -2010,10 +2204,12 @@
     }
 
     // Requests used to fail into the console only, leaving the page looking frozen
+    // The API layer now passes the server's own explanation through, so it
+    // is shown as written instead of buried under a second preamble
     function failureText(error) {
       return error instanceof TypeError
         ? 'Нет связи с сервером. Проверьте, запущен ли backend и верен ли его адрес.'
-        : `Сервер ответил ошибкой: ${error.message}`;
+        : error.message;
     }
 
     function reportFailure(action, error) {
@@ -2722,6 +2918,7 @@
       const actions = document.createElement('div');
       actions.className = 'cat-admin-actions';
       actions.append(
+        iconButton(category),
         smallButton('+ Подкатегория', () => openAddCategoryModal(category.id)),
         smallButton('Изменить', () => openEditCategoryModal(category)),
         smallButton('Удалить', () => removeCategory(category), 'danger'));
@@ -2753,6 +2950,188 @@
       button.onclick = onClick;
       return button;
     }
+
+    /* The picture on a category's tile. Without one the tile borrows a
+       photograph from the first product in the branch, which is a guess —
+       this is how the admin says which picture it should be. On a section
+       the same picture becomes the mark standing beside its tiles. */
+    function iconButton(category) {
+      const wrap = document.createElement('label');
+      wrap.className = 'cat-admin-icon' + (category.icon ? ' has-icon' : '');
+      wrap.title = category.icon ? 'Заменить иконку' : 'Загрузить иконку';
+
+      wrap.innerHTML = category.icon
+        ? `<img src="${escapeHtml(category.icon)}" alt="">`
+        : '<span class="cat-admin-icon-empty">Иконка</span>';
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.hidden = true;
+      input.onchange = async () => {
+        const file = input.files[0];
+        if (!file) return;
+
+        try {
+          await AdminAPI.uploadCategoryIcon(category.id, file);
+          showNotification('Иконка загружена');
+          loadCategories();
+        } catch (error) {
+          showNotification(failureText(error), 'error');
+        }
+      };
+      wrap.appendChild(input);
+
+      // A picture already set needs a way back to the automatic one
+      if (category.icon) {
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'cat-admin-icon-clear';
+        clear.textContent = '×';
+        clear.title = 'Убрать иконку — вернётся фото товара';
+        clear.onclick = async (event) => {
+          event.preventDefault();
+          try {
+            await AdminAPI.clearCategoryIcon(category.id);
+            showNotification('Иконка убрана');
+            loadCategories();
+          } catch (error) {
+            showNotification(failureText(error), 'error');
+          }
+        };
+        wrap.appendChild(clear);
+      }
+
+      return wrap;
+    }
+
+    /* ---------- banners ---------- */
+
+    let bannerList = [];
+
+    async function loadBanners() {
+      try {
+        bannerList = await AdminAPI.getBanners();
+        const list = el('#banners-list');
+        clear(list);
+
+        if (!bannerList.length) {
+          list.innerHTML = '<p class="text-muted">Слайдов пока нет. ' +
+            'Пока их нет, на главной остаётся обычная шапка.</p>';
+          return;
+        }
+
+        bannerList.forEach((banner, index) => list.appendChild(bannerRow(banner, index)));
+      } catch (error) {
+        reportFailure('Не удалось загрузить слайды', error);
+        el('#banners-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    function bannerRow(banner, index) {
+      const row = document.createElement('div');
+      row.className = 'banner-row' + (banner.is_active ? '' : ' banner-hidden');
+
+      const order = document.createElement('div');
+      order.className = 'cat-admin-order';
+      order.append(
+        arrowButton('↑', index === 0, () => moveBanner(index, -1)),
+        arrowButton('↓', index === bannerList.length - 1, () => moveBanner(index, 1)));
+      row.appendChild(order);
+
+      const preview = document.createElement('div');
+      preview.className = 'banner-preview';
+      preview.innerHTML = `<img src="${escapeHtml(banner.image)}" alt="">`;
+      row.appendChild(preview);
+
+      const text = document.createElement('div');
+      text.className = 'banner-text';
+      text.innerHTML = `
+        <strong>${escapeHtml(banner.title || 'Без заголовка')}</strong>
+        <span class="text-muted">${escapeHtml(banner.subtitle || '')}</span>
+        <span class="text-muted">${banner.link
+          ? escapeHtml(banner.link) : 'без ссылки — слайд не кликается'}</span>`;
+      row.appendChild(text);
+
+      const actions = document.createElement('div');
+      actions.className = 'cat-admin-actions';
+      actions.append(
+        smallButton(banner.is_active ? 'Скрыть' : 'Показать', async () => {
+          try {
+            await AdminAPI.updateBanner(banner.id, { is_active: !banner.is_active });
+            loadBanners();
+          } catch (error) {
+            showNotification(failureText(error), 'error');
+          }
+        }),
+        smallButton('Удалить', () => removeBanner(banner), 'danger'));
+      row.appendChild(actions);
+
+      return row;
+    }
+
+    async function moveBanner(index, step) {
+      const target = index + step;
+      if (target < 0 || target >= bannerList.length) return;
+
+      [bannerList[index], bannerList[target]] = [bannerList[target], bannerList[index]];
+
+      try {
+        await AdminAPI.reorderBanners(bannerList.map(item => item.id));
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+      loadBanners();
+    }
+
+    async function removeBanner(banner) {
+      if (!confirm('Удалить слайд?')) return;
+
+      try {
+        await AdminAPI.deleteBanner(banner.id);
+        showNotification('Слайд удалён');
+        loadBanners();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    el('#banner-image').addEventListener('change', () => {
+      const file = el('#banner-image').files[0];
+      el('#banner-file-label').textContent = file ? file.name : 'Выбрать картинку';
+    });
+
+    el('#banner-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+
+      const file = el('#banner-image').files[0];
+      if (!file) {
+        showNotification('Выберите картинку — она и есть слайд', 'error');
+        return;
+      }
+
+      const button = el('#banner-submit');
+      button.disabled = true;
+      button.textContent = 'ЗАГРУЖАЕТСЯ…';
+
+      try {
+        await AdminAPI.createBanner(file, {
+          title: el('#banner-title').value,
+          subtitle: el('#banner-subtitle').value,
+          link: el('#banner-link').value,
+        }, percent => (button.textContent = `ЗАГРУЖАЕТСЯ… ${percent}%`));
+
+        showNotification('Слайд добавлен');
+        el('#banner-form').reset();
+        el('#banner-file-label').textContent = 'Выбрать картинку';
+        loadBanners();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      } finally {
+        button.disabled = false;
+        button.textContent = 'ДОБАВИТЬ СЛАЙД';
+      }
+    });
 
     function smallButton(label, onClick, variant = '') {
       const button = document.createElement('button');

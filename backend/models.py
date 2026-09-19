@@ -191,6 +191,36 @@ class Specification(db.Model):
             'value': self.value
         }
 
+class Banner(db.Model):
+    """A slide on the home page: news, an offer, a new product.
+
+    The picture is the whole slide; the heading and the line under it are
+    drawn over the bottom of it and may both be empty, for a banner that
+    is already lettered. A slide with no link is not clickable.
+    """
+
+    __tablename__ = 'banners'
+
+    id = db.Column(db.Integer, primary_key=True)
+    image = db.Column(db.String(255), nullable=False)
+    title = db.Column(db.String(200))
+    subtitle = db.Column(db.String(300))
+    link = db.Column(db.String(500))
+    sort_order = db.Column(db.Integer, default=0, index=True)
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'image': self.image,
+            'title': self.title,
+            'subtitle': self.subtitle,
+            'link': self.link,
+            'sort_order': self.sort_order,
+            'is_active': self.is_active,
+        }
+
 # Traffic is recorded as plain counts of what was opened or searched for.
 # Nothing identifying a visitor is stored — no address, no identifier.
 

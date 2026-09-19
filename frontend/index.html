@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260925">
+  <link rel="stylesheet" href="css/style.css?v=20260928">
 </head>
 <body>
   <!-- Header -->
@@ -56,8 +56,21 @@
     </div>
   </nav>
 
+  <!-- Slides: news, offers, a new product. Filled from the admin panel;
+       with nothing in it the hero below takes its place. -->
+  <section class="slider-wrap container" id="slider-wrap" hidden>
+    <div class="slider" id="slider">
+      <div class="slides" id="slides"></div>
+      <button type="button" class="slider-arrow slider-prev" id="slider-prev"
+              aria-label="Предыдущий слайд"></button>
+      <button type="button" class="slider-arrow slider-next" id="slider-next"
+              aria-label="Следующий слайд"></button>
+      <div class="slider-dots" id="slider-dots" role="tablist"></div>
+    </div>
+  </section>
+
   <!-- Hero Section -->
-  <section class="hero">
+  <section class="hero" id="hero">
     <div class="container">
       <div class="hero-content">
         <h1>Пневматика и автоматика со склада</h1>
@@ -132,10 +145,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20260925"></script>
-  <script src="js/main.js?v=20260925"></script>
-  <script src="js/effects.js?v=20260925"></script>
-  <script src="js/consent.js?v=20260925"></script>
+  <script src="js/api.js?v=20260928"></script>
+  <script src="js/main.js?v=20260928"></script>
+  <script src="js/effects.js?v=20260928"></script>
+  <script src="js/consent.js?v=20260928"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -195,6 +208,102 @@
           <div class="hero-stat-label">${stat.label}</div>
         </div>
       `).join('');
+    }
+
+    /* ---------- the slideshow ----------
+       News, an offer, a new product. The pictures come from the admin
+       panel, so nothing here needs touching to change what is shown. */
+
+    const SLIDE_MS = 6000;
+    let slideIndex = 0;
+    let slideTimer = null;
+    let slideCount = 0;
+
+    async function loadSlider() {
+      let banners = [];
+      try {
+        banners = await ProductAPI.getBanners();
+      } catch (error) {
+        // No slides is the normal state of a new site, and a slider that
+        // cannot load must not take the page down with it
+        console.error('Error loading banners:', error);
+        return;
+      }
+
+      if (!banners.length) return;
+
+      // The slides replace the opening block rather than pushing it down
+      el('#hero').hidden = true;
+      el('#slider-wrap').hidden = false;
+      slideCount = banners.length;
+
+      el('#slides').innerHTML = banners.map((banner, index) => {
+        const caption = (banner.title || banner.subtitle) ? `
+          <span class="slide-caption">
+            ${banner.title ? `<span class="slide-title">${escapeHtml(banner.title)}</span>` : ''}
+            ${banner.subtitle ? `<span class="slide-subtitle">${escapeHtml(banner.subtitle)}</span>` : ''}
+          </span>` : '';
+
+        const inside = `
+          <img src="${escapeHtml(banner.image)}" alt="${escapeHtml(banner.title || '')}"
+               ${index ? 'loading="lazy"' : ''}>
+          ${caption}`;
+
+        // A slide with nowhere to go is not a link
+        return banner.link
+          ? `<a class="slide" href="${escapeHtml(banner.link)}">${inside}</a>`
+          : `<span class="slide">${inside}</span>`;
+      }).join('');
+
+      el('#slider-dots').innerHTML = banners.map((banner, index) => `
+        <button type="button" class="slider-dot" role="tab"
+                aria-label="Слайд ${index + 1}" data-slide="${index}"></button>`).join('');
+
+      elAll('#slider-dots .slider-dot').forEach(dot =>
+        dot.addEventListener('click', () => showSlide(Number(dot.dataset.slide))));
+
+      el('#slider-prev').addEventListener('click', () => showSlide(slideIndex - 1));
+      el('#slider-next').addEventListener('click', () => showSlide(slideIndex + 1));
+
+      // One slide needs no arrows, no dots and no timer
+      if (slideCount < 2) {
+        el('#slider').classList.add('slider-single');
+        showSlide(0, false);
+        return;
+      }
+
+      // Reading stops the carousel moving out from under the reader
+      const slider = el('#slider');
+      slider.addEventListener('mouseenter', stopSlides);
+      slider.addEventListener('mouseleave', startSlides);
+      slider.addEventListener('focusin', stopSlides);
+
+      showSlide(0);
+    }
+
+    function showSlide(index, restart = true) {
+      if (!slideCount) return;
+
+      // Past the last slide comes the first again
+      slideIndex = (index + slideCount) % slideCount;
+      el('#slides').style.transform = `translateX(-${slideIndex * 100}%)`;
+
+      elAll('#slider-dots .slider-dot').forEach((dot, position) =>
+        dot.classList.toggle('active', position === slideIndex));
+
+      if (restart) startSlides();
+    }
+
+    function startSlides() {
+      stopSlides();
+      if (slideCount > 1 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        slideTimer = setInterval(() => showSlide(slideIndex + 1, false), SLIDE_MS);
+      }
+    }
+
+    function stopSlides() {
+      clearInterval(slideTimer);
+      slideTimer = null;
     }
 
     // How long the fold takes. Must match --unfold in the stylesheet.
@@ -349,10 +458,21 @@
       inner.dataset.filled = '1';
 
       if (category.children && category.children.length) {
+        // A section's own icon is its mark, standing beside the tiles rather
+        // than on one of them — the place a supplier's logo goes
+        const mark = category.icon ? `
+          <div class="section-mark">
+            <img src="${escapeHtml(category.icon)}" alt="${escapeHtml(category.name)}"
+                 loading="lazy">
+          </div>` : '';
+
         inner.innerHTML = `
           <div class="section-pad">
-            <div class="tile-grid">
-              ${category.children.map(categoryTile).join('')}
+            <div class="section-row">
+              ${mark}
+              <div class="tile-grid">
+                ${category.children.map(categoryTile).join('')}
+              </div>
             </div>
             <a class="section-all" href="catalog.html?category=${category.id}">
               Все ${category.total_count} товаров раздела
@@ -483,6 +603,7 @@
 
     // Load on page load
     loadContent();
+    loadSlider();
   </script>
 </body>
 </html>
