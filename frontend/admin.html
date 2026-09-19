@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20260929">
+  <link rel="stylesheet" href="css/style.css?v=20261001">
   <style>
     .admin-layout {
       display: grid;
@@ -66,6 +66,12 @@
       margin-bottom: 24px;
       padding-bottom: 16px;
       border-bottom: 1px solid var(--color-border);
+    }
+
+    /* The panel's own display rule would otherwise beat the browser's
+       [hidden] rule, and the bar and the progress strip would never go away */
+    [hidden] {
+      display: none !important;
     }
 
     .admin-table {
@@ -1103,6 +1109,118 @@
       white-space: nowrap;
     }
 
+    /* ===== IMPORT PROGRESS ===== */
+    .import-progress {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: #f7f8fa;
+    }
+
+    .import-progress-track {
+      flex: 1;
+      height: 8px;
+      border-radius: 999px;
+      background: #e2e5e9;
+      overflow: hidden;
+    }
+
+    .import-progress-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      background: var(--color-accent);
+      transition: width 250ms ease;
+    }
+
+    .import-progress-label {
+      flex: none;
+      font-size: 13px;
+      color: var(--ink-soft);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== TICKING PRODUCTS ===== */
+    .tick-cell {
+      width: 36px;
+      text-align: center;
+    }
+
+    .tick-cell input {
+      width: 17px;
+      height: 17px;
+      accent-color: var(--color-accent);
+      cursor: pointer;
+    }
+
+    .bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border: 1px solid var(--color-accent);
+      border-radius: 8px;
+      background: rgba(13, 94, 244, 0.06);
+    }
+
+    .bulk-count {
+      font-weight: 650;
+      font-size: 14px;
+    }
+
+    .bulk-select {
+      padding: 8px 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 14px;
+      min-width: 200px;
+    }
+
+    /* ===== ASSIGN PREVIEW ===== */
+    .assign-preview {
+      margin-top: 4px;
+      padding: 12px 14px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      background: #f7f8fa;
+      font-size: 13px;
+      color: var(--ink-muted);
+    }
+
+    .assign-preview-found {
+      border-color: #b9d4a8;
+      background: #f2f8ef;
+      color: var(--ink-soft);
+    }
+
+    .assign-preview-empty {
+      border-color: #e4bdba;
+      background: #fdf5f4;
+      color: #8a3c34;
+    }
+
+    .assign-preview ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      line-height: 1.5;
+    }
+
+    .assign-preview .num {
+      font-family: var(--font-mono);
+    }
+
+    .assign-preview em {
+      color: var(--ink-muted);
+      font-style: normal;
+    }
+
     /* ===== BRANDS ===== */
     .brand-list {
       display: flex;
@@ -1340,6 +1458,31 @@
         flex-basis: 140px;
       }
 
+      /* The table becomes stacked cards on a phone, so the tick needs its
+         own labelled line like every other field */
+      .tick-cell {
+        width: auto;
+        text-align: left;
+      }
+
+      .admin-table td.tick-cell::before {
+        content: "Отметить";
+      }
+
+      .bulk-bar .btn,
+      .bulk-select {
+        flex: 1;
+        min-width: 140px;
+      }
+
+      .import-progress {
+        flex-wrap: wrap;
+      }
+
+      .import-progress-track {
+        flex-basis: 100%;
+      }
+
       /* A dialog on a phone is a sheet: it comes up from the bottom edge and
          keeps its own scroll instead of dragging the page behind it */
       .modal {
@@ -1417,14 +1560,34 @@
           </div>
         </div>
 
+        <!-- How far the import has got: the upload, then the rows -->
+        <div class="import-progress" id="import-progress" hidden>
+          <div class="import-progress-track">
+            <div class="import-progress-fill" id="import-progress-fill"></div>
+          </div>
+          <span class="import-progress-label" id="import-progress-label"></span>
+        </div>
+
+        <!-- Appears once something is ticked; the brand goes on those rows -->
+        <div class="bulk-bar" id="bulk-bar" hidden>
+          <span class="bulk-count" id="bulk-count"></span>
+          <select id="bulk-brand" class="bulk-select"></select>
+          <button type="button" class="btn btn-primary" onclick="applyBulkBrand()">Проставить бренд</button>
+          <button type="button" class="btn btn-ghost" onclick="clearSelection()">Снять выделение</button>
+        </div>
+
         <div class="admin-table" style="overflow-x: auto;">
           <table style="width: 100%;">
             <thead>
               <tr>
+                <th class="tick-cell">
+                  <input type="checkbox" id="tick-all" title="Отметить всё на странице">
+                </th>
                 <th>Фото</th>
                 <th>SKU</th>
                 <th>Название</th>
                 <th>Категория</th>
+                <th>Бренд</th>
                 <th>Цена</th>
                 <th>Остаток</th>
                 <th>Действия</th>
@@ -1432,7 +1595,7 @@
             </thead>
             <tbody id="products-table-body">
               <tr>
-                <td colspan="7" class="loading">Загрузка...</td>
+                <td colspan="9" class="loading">Загрузка...</td>
               </tr>
             </tbody>
           </table>
@@ -1689,7 +1852,16 @@
           <input type="text" id="brand-name" required>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width: 100%;">ДОБАВИТЬ</button>
+        <div class="form-group">
+          <label>Логотип</label>
+          <label class="banner-file" style="width: 100%;">
+            <input type="file" id="brand-logo-file" accept="image/*" hidden>
+            <span id="brand-logo-label">Выбрать картинку</span>
+          </label>
+          <small class="text-muted">Можно не выбирать сейчас — загрузите позже щелчком по квадрату в списке</small>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;" id="brand-submit">ДОБАВИТЬ</button>
       </form>
     </div>
   </div>
@@ -1714,8 +1886,13 @@
 
         <div class="form-group">
           <label>Начало артикула</label>
-          <input type="text" id="assign-prefix" placeholder="например NG-PL">
+          <input type="text" id="assign-prefix" placeholder="например NG-PL" autocomplete="off">
           <small class="text-muted">Регистр не важен</small>
+        </div>
+
+        <!-- What the condition hits, before anything is changed -->
+        <div class="assign-preview" id="assign-preview">
+          Укажите условие, и здесь появится, сколько товаров под него попадёт
         </div>
 
         <div class="form-group">
@@ -1730,8 +1907,8 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20260929"></script>
-  <script src="js/main.js?v=20260929"></script>
+  <script src="js/api.js?v=20261001"></script>
+  <script src="js/main.js?v=20261001"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -2234,7 +2411,93 @@
 
 
     // Products
+    /* ---------- ticking products ----------
+       The natural place to say «эти — Pneumax» is the list itself: tick the
+       rows and pick the brand. Guessing an article-number prefix blind is
+       the fallback, not the first resort. The set survives paging, so a
+       brand spread over two pages is still one action. */
+
+    const selectedProducts = new Set();
+
+    function wireTicks() {
+      elAll('.row-tick').forEach(tick => {
+        tick.onchange = () => {
+          const id = Number(tick.value);
+          tick.checked ? selectedProducts.add(id) : selectedProducts.delete(id);
+          updateBulkBar();
+        };
+      });
+
+      const all = el('#tick-all');
+      if (all) {
+        all.checked = false;
+        all.onchange = () => {
+          elAll('.row-tick').forEach(tick => {
+            tick.checked = all.checked;
+            const id = Number(tick.value);
+            all.checked ? selectedProducts.add(id) : selectedProducts.delete(id);
+          });
+          updateBulkBar();
+        };
+      }
+
+      updateBulkBar();
+    }
+
+    function updateBulkBar() {
+      const bar = el('#bulk-bar');
+      if (!bar) return;
+
+      bar.hidden = selectedProducts.size === 0;
+      if (bar.hidden) return;
+
+      el('#bulk-count').textContent = `Отмечено: ${selectedProducts.size}`;
+      fillBulkBrands();
+    }
+
+    async function fillBulkBrands() {
+      const select = el('#bulk-brand');
+      if (select.dataset.filled) return;
+
+      try {
+        const brands = await AdminAPI.getBrands();
+        select.innerHTML = '<option value="">— убрать бренд —</option>';
+        brands.forEach(brand => {
+          select.innerHTML += `<option value="${brand.id}">${escapeHtml(brand.name)}</option>`;
+        });
+        select.dataset.filled = '1';
+      } catch (error) {
+        reportFailure('Не удалось загрузить бренды', error);
+      }
+    }
+
+    function clearSelection() {
+      selectedProducts.clear();
+      elAll('.row-tick').forEach(tick => (tick.checked = false));
+      const all = el('#tick-all');
+      if (all) all.checked = false;
+      updateBulkBar();
+    }
+
+    async function applyBulkBrand() {
+      if (!selectedProducts.size) return;
+
+      const brandId = el('#bulk-brand').value;
+      try {
+        const result = await AdminAPI.setProductsBrand([...selectedProducts],
+                                                       brandId ? Number(brandId) : null);
+        showNotification(brandId
+          ? `Бренд проставлен ${result.updated} товарам`
+          : `Бренд снят с ${result.updated} товаров`);
+        clearSelection();
+        loadProducts(currentProductsPage);
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
     async function loadProducts(page = 1) {
+      currentProductsPage = page;
       try {
         const data = await AdminAPI.getProducts(page);
         const tbody = el('#products-table-body');
@@ -2243,6 +2506,10 @@
         data.products.forEach(product => {
           tbody.innerHTML += `
             <tr>
+              <td data-label="" class="tick-cell">
+                <input type="checkbox" class="row-tick" value="${product.id}"
+                       ${selectedProducts.has(product.id) ? 'checked' : ''}>
+              </td>
               <td data-label="Фото">
                 ${product.image
                   ? `<img src="${product.image}" alt="" class="table-thumb" onclick="openImagePreview('${product.image}')">`
@@ -2251,6 +2518,8 @@
               <td data-label="Артикул">${product.sku}</td>
               <td data-label="Название">${product.name}</td>
               <td data-label="Категория">${product.category?.name || '-'}</td>
+              <td data-label="Бренд">${product.brand?.name
+                ? escapeHtml(product.brand.name) : '<span class="text-muted">—</span>'}</td>
               <td data-label="Цена">${formatPrice(product.price)}</td>
               <td data-label="Остаток">${product.stock}</td>
               <td data-label="">
@@ -2262,6 +2531,8 @@
             </tr>
           `;
         });
+
+        wireTicks();
 
         // Pagination
         const paginationDiv = el('#products-pagination');
@@ -3457,6 +3728,56 @@
     // The brand being labelled, while the dialog is open
     let assigningBrand = null;
 
+    /* The dialog asks the server what the condition hits while it is being
+       typed, so «Применить» is never a guess. The request is held back a
+       moment, or every keystroke would be a round trip. */
+    let previewTimer = null;
+
+    function schedulePreview() {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(runPreview, 250);
+    }
+
+    async function runPreview() {
+      const host = el('#assign-preview');
+      const selection = {};
+
+      const category = el('#assign-category').value;
+      if (category) selection.category_id = Number(category);
+
+      const prefix = el('#assign-prefix').value.trim();
+      if (prefix) selection.sku_prefix = prefix;
+
+      if (!selection.category_id && !selection.sku_prefix) {
+        host.className = 'assign-preview';
+        host.textContent = 'Укажите условие, и здесь появится, сколько товаров под него попадёт';
+        return;
+      }
+
+      try {
+        const result = await AdminAPI.previewBrandSelection(selection);
+
+        if (!result.count) {
+          host.className = 'assign-preview assign-preview-empty';
+          host.textContent = 'Под это условие не попадает ни один товар';
+          return;
+        }
+
+        host.className = 'assign-preview assign-preview-found';
+        host.innerHTML = `
+          <strong>Подходит товаров: ${result.count}</strong>
+          <ul>${result.sample.map(item => `
+            <li><span class="num">${escapeHtml(item.sku)}</span> ${escapeHtml(item.name)}${
+              item.brand ? ` <em>(сейчас ${escapeHtml(item.brand)})</em>` : ''}</li>`).join('')}
+          </ul>
+          ${result.count > result.sample.length
+            ? `<span class="text-muted">…и ещё ${result.count - result.sample.length}</span>` : ''}`;
+      } catch (error) {
+        host.className = 'assign-preview assign-preview-empty';
+        host.textContent = failureText(error);
+      }
+    }
+
     function openAssignBrand(brand) {
       assigningBrand = brand;
       el('#assign-brand-name').textContent = brand.name;
@@ -3472,7 +3793,11 @@
       });
 
       el('#assign-modal').classList.add('active');
+      runPreview();
     }
+
+    el('#assign-category').addEventListener('change', schedulePreview);
+    el('#assign-prefix').addEventListener('input', schedulePreview);
 
     function closeAssignBrand() {
       el('#assign-modal').classList.remove('active');
@@ -3511,21 +3836,30 @@
       el('#brand-modal').classList.remove('active');
     }
 
+    el('#brand-logo-file').addEventListener('change', () => {
+      const file = el('#brand-logo-file').files[0];
+      el('#brand-logo-label').textContent = file ? file.name : 'Выбрать картинку';
+    });
+
     el('#brand-form').addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const data = {
-        name: el('#brand-name').value
-      };
+      const button = el('#brand-submit');
+      button.disabled = true;
 
       try {
-        await AdminAPI.createBrand(data);
+        await AdminAPI.createBrand(el('#brand-name').value,
+                                   el('#brand-logo-file').files[0] || null);
         showNotification('Бренд добавлен');
+        el('#brand-logo-label').textContent = 'Выбрать картинку';
         loadBrands();
         loadBrandsForSelect();
+        el('#bulk-brand').dataset.filled = '';   // список брендов устарел
         closeBrandModal();
       } catch (error) {
-        showNotification('Ошибка: ' + error.message, 'error');
+        showNotification(failureText(error), 'error');
+      } finally {
+        button.disabled = false;
       }
     });
 
@@ -3570,19 +3904,36 @@
         return;
       }
 
+      // The job id is what lets the browser ask how far the server has got.
+      // Without it, three hundred rows with photographs look like a frozen page.
+      const jobId = `imp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      showImportProgress(0, 'Загрузка файла…');
+      let poller = null;
+
       try {
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('job_id', jobId);
 
-        const response = await fetch(`${API_BASE}/admin/import/excel`, {
-          method: 'POST',
-          headers: authHeader(),
-          body: formData
-        });
+        const sending = uploadWithProgress(
+          `${API_BASE}/admin/import/excel`, formData,
+          percent => showImportProgress(percent * 0.25, 'Загрузка файла…'));
 
-        const result = await response.json();
+        // The upload is a quarter of the bar; the rest is the server working
+        // through the rows, which is where the time actually goes
+        poller = setInterval(async () => {
+          try {
+            const state = await AdminAPI.importProgress(jobId);
+            if (!state.total || state.finished) return;
+            showImportProgress(25 + (state.done / state.total) * 75,
+                               `Обработано ${state.done} из ${state.total} строк`);
+          } catch (error) {
+            // A missed poll is not worth stopping the import over
+          }
+        }, 400);
 
-        if (!response.ok) throw new Error(result.error);
+        const result = await sending;
+        showImportProgress(100, 'Готово');
 
         let message = result.message;
         if (result.errors && result.errors.length > 0) {
@@ -3594,10 +3945,25 @@
         loadCategoriesForSelect();
         loadBrandsForSelect();
       } catch (error) {
-        showNotification('Ошибка импорта: ' + error.message, 'error');
+        showNotification('Ошибка импорта: ' + failureText(error), 'error');
+      } finally {
+        clearInterval(poller);
+        setTimeout(hideImportProgress, 700);
       }
 
       event.target.value = '';
+    }
+
+    function showImportProgress(percent, label) {
+      const bar = el('#import-progress');
+      bar.hidden = false;
+      el('#import-progress-fill').style.width = `${Math.min(100, Math.round(percent))}%`;
+      el('#import-progress-label').textContent = label;
+    }
+
+    function hideImportProgress() {
+      el('#import-progress').hidden = true;
+      el('#import-progress-fill').style.width = '0%';
     }
   </script>
 </body>

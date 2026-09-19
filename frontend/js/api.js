@@ -318,6 +318,11 @@ const AdminAPI = {
     });
   },
 
+  // How far a running import has got
+  importProgress: (jobId) =>
+    apiCall(`/admin/import/progress/${encodeURIComponent(jobId)}`,
+            { headers: authHeader() }),
+
   seoCatalog: () => apiCall('/admin/seo/catalog', { headers: authHeader() }),
 
   seoTraffic: (days = 30) => apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
@@ -327,12 +332,36 @@ const AdminAPI = {
     return apiCall('/admin/brands', { headers });
   },
 
-  createBrand: (data) => {
+  // The logo rides along with the name, so a brand is created in one go
+  createBrand: (name, logoFile, onProgress) => {
+    if (!logoFile) {
+      const headers = authHeader();
+      return apiCall('/admin/brands', { method: 'POST', headers, body: { name } });
+    }
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('image', logoFile);
+    return uploadWithProgress(`${API_BASE}/admin/brands`, formData, onProgress);
+  },
+
+  // What a selection would hit, before anything is changed
+  previewBrandSelection: (selection) => {
     const headers = authHeader();
-    return apiCall('/admin/brands', {
+    return apiCall('/admin/brands/preview', {
       method: 'POST',
       headers,
-      body: data
+      body: selection
+    });
+  },
+
+  // The brand for the rows ticked in the product list
+  setProductsBrand: (productIds, brandId) => {
+    const headers = authHeader();
+    return apiCall('/admin/products/brand', {
+      method: 'PUT',
+      headers,
+      body: { product_ids: productIds, brand_id: brandId }
     });
   },
 

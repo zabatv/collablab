@@ -1028,8 +1028,15 @@ def admin_brands():
         brands = Brand.query.order_by(Brand.name).all()
         return jsonify([brand.to_dict() for brand in brands])
 
-    data = request.get_json() or {}
-    name = str(data.get('name', '')).strip()
+    # The logo may ride along with the name, so a brand is created once
+    # rather than named in one place and illustrated in another
+    if request.files:
+        name = (request.form.get('name') or '').strip()
+        logo_file = request.files.get('image')
+    else:
+        name = str((request.get_json() or {}).get('name', '')).strip()
+        logo_file = None
+
     if not name:
         return jsonify({'error': 'Название бренда не может быть пустым'}), 400
 
@@ -1039,8 +1046,16 @@ def admin_brands():
     try:
         brand = Brand(name=name[:100])
         db.session.add(brand)
+        db.session.flush()
+
+        if logo_file and logo_file.filename:
+            brand.logo = save_upload(logo_file, f'brand{brand.id}', IMAGE_EXTENSIONS)
+
         db.session.commit()
         return jsonify(brand.to_dict()), 201
+    except ValueError as error:
+        db.session.rollback()
+        return jsonify({'error': str(error)}), 400
     except Exception as error:
         db.session.rollback()
         return jsonify({'error': str(error)}), 400
@@ -1107,6 +1122,73 @@ def upload_brand_logo(brand_id):
         db.session.rollback()
         return jsonify({'error': str(error)}), 400
 
+def brand_selection_query(data):
+    """The products a selection describes, or an error explaining why not.
+
+    Returns (query, error). A selection with no condition is refused: one
+    click would otherwise label the whole catalogue."""
+    query = Product.query
+    described = False
+
+    category_id = data.get('category_id')
+    if category_id:
+        category = Category.query.get(category_id)
+        if not category:
+            return None, 'Категория не найдена'
+        branch = [node.id for node in category.descendants()]
+        query = query.filter(Product.category_id.in_(branch))
+        described = True
+
+    prefix = str(data.get('sku_prefix', '')).strip()
+    if prefix:
+        query = query.filter(Product.sku.ilike(f'{prefix}%'))
+        described = True
+
+    if not described:
+        return None, ('Укажите раздел или начало артикула — '
+                      'иначе бренд встанет на весь каталог')
+
+    return query, None
+
+@app.route('/api/admin/brands/preview', methods=['POST'])
+@require_admin
+def preview_brand_selection():
+    """What a selection would hit, before anything is changed.
+
+    Typing a prefix blind and hoping is not a way to label three hundred
+    positions; this is what the dialog shows while you type."""
+    query, error = brand_selection_query(request.get_json() or {})
+    if error:
+        return jsonify({'error': error}), 400
+
+    products = query.order_by(Product.sku).all()
+    return jsonify({
+        'count': len(products),
+        'sample': [{'sku': p.sku, 'name': p.name[:70],
+                    'brand': p.brand.name if p.brand else None}
+                   for p in products[:8]],
+    })
+
+@app.route('/api/admin/products/brand', methods=['PUT'])
+@require_admin
+def set_products_brand():
+    """Put a brand on the products ticked in the list, or take it off."""
+    data = request.get_json() or {}
+    ids = data.get('product_ids')
+    if not isinstance(ids, list) or not ids:
+        return jsonify({'error': 'Не выбрано ни одного товара'}), 400
+
+    brand_id = data.get('brand_id') or None
+    if brand_id and not Brand.query.get(brand_id):
+        return jsonify({'error': 'Бренд не найден'}), 400
+
+    products = Product.query.filter(Product.id.in_(ids)).all()
+    for product in products:
+        product.brand_id = brand_id
+
+    db.session.commit()
+    return jsonify({'updated': len(products)})
+
 @app.route('/api/admin/brands/<int:brand_id>/assign', methods=['POST'])
 @require_admin
 def assign_brand(brand_id):
@@ -1119,27 +1201,9 @@ def assign_brand(brand_id):
     brand = Brand.query.get_or_404(brand_id)
     data = request.get_json() or {}
 
-    query = Product.query
-    described = False
-
-    category_id = data.get('category_id')
-    if category_id:
-        category = Category.query.get(category_id)
-        if not category:
-            return jsonify({'error': 'Категория не найдена'}), 400
-        branch = [node.id for node in category.descendants()]
-        query = query.filter(Product.category_id.in_(branch))
-        described = True
-
-    prefix = str(data.get('sku_prefix', '')).strip()
-    if prefix:
-        query = query.filter(Product.sku.ilike(f'{prefix}%'))
-        described = True
-
-    if not described:
-        return jsonify({
-            'error': 'Укажите раздел или начало артикула — '
-                     'иначе бренд встанет на весь каталог'}), 400
+    query, error = brand_selection_query(data)
+    if error:
+        return jsonify({'error': error}), 400
 
     # Clearing is how a mistaken assignment is undone
     new_brand_id = None if data.get('clear') else brand.id
@@ -1292,6 +1356,41 @@ def export_excel():
         download_name=f'products_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
     )
 
+# ===== IMPORT PROGRESS =====
+# Three hundred rows with photographs take a while, and a page that only says
+# «загружается» for half a minute looks stuck. The browser sends a job id with
+# the file and asks how far along it is; this is where the answer is kept.
+# It lives in memory on purpose: it is worth nothing once the import ends.
+
+IMPORT_JOBS = {}
+IMPORT_JOBS_KEPT = 20
+
+def start_import_job(job_id, total):
+    if not job_id:
+        return
+
+    # Only the last few are worth keeping, and the oldest go first
+    while len(IMPORT_JOBS) >= IMPORT_JOBS_KEPT:
+        IMPORT_JOBS.pop(next(iter(IMPORT_JOBS)), None)
+
+    IMPORT_JOBS[job_id] = {'done': 0, 'total': total, 'finished': False}
+
+def advance_import_job(job_id, done):
+    job = IMPORT_JOBS.get(job_id)
+    if job:
+        job['done'] = done
+
+def finish_import_job(job_id, result):
+    job = IMPORT_JOBS.get(job_id)
+    if job:
+        job.update(result, finished=True, done=job['total'])
+
+@app.route('/api/admin/import/progress/<job_id>', methods=['GET'])
+@require_admin
+def import_progress(job_id):
+    """How far the import has got. Unknown ids answer 'not started yet'."""
+    return jsonify(IMPORT_JOBS.get(job_id) or {'done': 0, 'total': 0, 'finished': False})
+
 @app.route('/api/admin/import/excel', methods=['POST'])
 @require_admin
 def import_excel():
@@ -1391,7 +1490,12 @@ def import_excel():
         updated = 0
         errors = []
 
+        job_id = (request.form.get('job_id') or '').strip()
+        start_import_job(job_id, max(ws.max_row - header_row, 0))
+
         for row in range(header_row + 1, ws.max_row + 1):
+            advance_import_job(job_id, row - header_row)
+
             sku = str(ws.cell(row=row, column=sku_col).value or '').strip()
             name = str(ws.cell(row=row, column=name_col).value or '').strip()
 
@@ -1520,15 +1624,20 @@ def import_excel():
 
         db.session.commit()
 
-        return jsonify({
+        result = {
             'message': f'Импорт завершен: добавлено {imported}, обновлено {updated}',
             'imported': imported,
             'updated': updated,
             'errors': errors[:10]  # Return first 10 errors
-        })
+        }
+        finish_import_job(job_id, result)
+        return jsonify(result)
 
     except Exception as e:
         db.session.rollback()
+        # The poller must not be left waiting on an import that already died
+        finish_import_job((request.form.get('job_id') or '').strip(),
+                          {'error': str(e)})
         return jsonify({'error': f'Ошибка чтения файла: {str(e)}'}), 400
 
 # ===== SEO ANALYTICS =====
