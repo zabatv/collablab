@@ -132,35 +132,32 @@
   <script src="js/effects.js?v=20260919"></script>
   <script src="js/consent.js?v=20260919"></script>
   <script>
-    const PRODUCTS_PER_CATEGORY = 8;
+    const PRODUCTS_PER_SECTION = 8;
 
     async function loadContent() {
       const sections = el('#category-sections');
       sections.innerHTML = '<div class="grid grid-4" id="first-skeleton"></div>';
-      renderSkeletons(el('#first-skeleton'), PRODUCTS_PER_CATEGORY);
+      renderSkeletons(el('#first-skeleton'), PRODUCTS_PER_SECTION);
 
       try {
-        // Categories come straight from the database, so a category created by
-        // adding or importing a product shows up here without touching the code
-        const categories = await ProductAPI.getCategories();
-        categories.sort((a, b) => b.product_count - a.product_count);
+        // The tree comes from the database, so a section or subcategory the
+        // admin adds shows up here without touching the code
+        const tree = await ProductAPI.getCategories();
+        const filled = tree.filter(section => section.total_count > 0);
 
-        renderCategoryBar(categories);
-        renderHeroStats(categories);
+        renderCategoryBar(filled);
+        renderHeroStats(tree);
 
-        const filled = categories.filter(category => category.product_count > 0);
         if (filled.length === 0) {
           sections.innerHTML = '<div class="empty-state"><p>Товары не найдены</p></div>';
           return;
         }
 
-        const batches = await Promise.all(filled.map(category =>
-          ProductAPI.getProducts({ category_id: category.id, per_page: PRODUCTS_PER_CATEGORY })
-        ));
-
         clear(sections);
-        filled.forEach((category, index) => {
-          renderCategorySection(sections, category, batches[index].products);
+        filled.forEach((section, index) => {
+          // The first section opens, the rest stay shut: the point of the
+          // accordion is that the page does not dump everything at once
+          renderSection(sections, section, index === 0);
         });
       } catch (error) {
         console.error('Error loading content:', error);
@@ -168,15 +165,15 @@
       }
     }
 
-    function renderHeroStats(categories) {
+    function renderHeroStats(tree) {
       const host = el('#hero-stats');
-      const products = categories.reduce((sum, category) => sum + category.product_count, 0);
-      const filled = categories.filter(category => category.product_count > 0).length;
+      const products = tree.reduce((sum, section) => sum + section.total_count, 0);
+      const sections = tree.filter(section => section.total_count > 0).length;
 
       // count: effects.js runs the number up when it scrolls into view
       const stats = [
         { count: products, label: 'позиций в каталоге' },
-        { count: filled, label: 'категорий' },
+        { count: sections, label: 'разделов' },
         { text: '24 ч', label: 'ответ на запрос' },
       ];
 
@@ -190,33 +187,85 @@
       `).join('');
     }
 
-    function renderCategorySection(container, category, products) {
-      if (products.length === 0) return;
-
+    // A section is a bar that opens and closes. Open, it shows the
+    // subcategories under it — names and photographs, not a wall of products.
+    function renderSection(container, category, open) {
       const section = document.createElement('section');
-      section.className = 'category-section reveal';
+      section.className = 'section-block reveal';
 
-      const header = document.createElement('div');
-      header.className = 'category-section-header';
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'section-head-bar';
+      head.setAttribute('aria-expanded', String(open));
+      head.innerHTML = `
+        <span class="section-chevron" aria-hidden="true"></span>
+        <span class="section-title">${escapeHtml(category.name)}</span>
+        <span class="section-count num">${category.total_count}</span>`;
 
-      const title = document.createElement('h2');
-      title.textContent = category.name;
-      header.appendChild(title);
+      const body = document.createElement('div');
+      body.className = 'section-body';
+      body.hidden = !open;
 
-      const link = document.createElement('a');
-      link.className = 'category-section-link';
-      link.href = `catalog.html?category=${category.id}`;
-      link.textContent = `Все ${category.product_count} товаров`;
-      header.appendChild(link);
+      head.addEventListener('click', () => {
+        const nowOpen = body.hidden;
+        body.hidden = !nowOpen;
+        head.setAttribute('aria-expanded', String(nowOpen));
+        if (nowOpen) fillSection(body, category);
+      });
 
-      section.appendChild(header);
+      section.append(head, body);
+      container.appendChild(section);
 
+      if (open) fillSection(body, category);
+    }
+
+    // Filled the first time the section is opened, not before
+    async function fillSection(body, category) {
+      if (body.dataset.filled) return;
+      body.dataset.filled = '1';
+
+      if (category.children && category.children.length) {
+        body.innerHTML = `
+          <div class="tile-grid">
+            ${category.children.map(child => categoryTile(child)).join('')}
+          </div>
+          <a class="section-all" href="catalog.html?category=${category.id}">
+            Все ${category.total_count} товаров раздела →
+          </a>`;
+        return;
+      }
+
+      // A section with no subcategories shows its products instead
       const grid = document.createElement('div');
       grid.className = 'grid grid-4';
-      grid.innerHTML = products.map(product => createProductCard(product)).join('');
-      section.appendChild(grid);
+      renderSkeletons(grid, 4);
+      body.appendChild(grid);
 
-      container.appendChild(section);
+      try {
+        const data = await ProductAPI.getProducts({
+          category_id: category.id, per_page: PRODUCTS_PER_SECTION });
+        grid.innerHTML = data.products.map(createProductCard).join('');
+
+        const all = document.createElement('a');
+        all.className = 'section-all';
+        all.href = `catalog.html?category=${category.id}`;
+        all.textContent = `Все ${category.total_count} товаров раздела →`;
+        body.appendChild(all);
+      } catch (error) {
+        grid.innerHTML = '<p class="text-muted">Не удалось загрузить товары</p>';
+      }
+    }
+
+    function categoryTile(category) {
+      return `
+        <a class="tile" href="catalog.html?category=${category.id}">
+          <span class="tile-image">
+            <img src="${escapeHtml(category.image || NO_IMAGE)}" alt=""
+                 loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
+          </span>
+          <span class="tile-name">${escapeHtml(category.name)}</span>
+          <span class="tile-count num">${category.total_count}</span>
+        </a>`;
     }
 
     const VISIBLE_CATEGORIES = 5;
@@ -232,7 +281,8 @@
 
       const count = document.createElement('span');
       count.className = 'category-bar-count';
-      count.textContent = category.product_count;
+      // The section's own products plus everything in its subcategories
+      count.textContent = category.total_count;
       link.appendChild(count);
 
       return link;

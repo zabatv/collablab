@@ -4,24 +4,80 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class Category(db.Model):
+    """A node of the catalogue tree.
+
+    A category points at its parent, so the same table holds sections and the
+    subsections under them. Names are unique only among siblings — «Прямые»
+    may sit under Фитинги and under Клапаны at the same time — and sort_order
+    is what the admin drags around to decide what comes first.
+    """
+
     __tablename__ = 'categories'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(100), unique=True)
     description = db.Column(db.Text)
     icon = db.Column(db.String(255))
+
+    parent_id = db.Column(db.Integer, db.ForeignKey('categories.id'), index=True)
+    sort_order = db.Column(db.Integer, default=0, index=True)
+
+    children = db.relationship(
+        'Category', backref=db.backref('parent', remote_side=[id]),
+        lazy='select', order_by='Category.sort_order, Category.name')
+
     products = db.relationship('Product', backref='category', lazy=True, cascade='all, delete-orphan')
 
-    def to_dict(self):
-        return {
+    def descendants(self):
+        """This category and everything under it, however deep."""
+        found = [self]
+        for child in self.children:
+            found.extend(child.descendants())
+        return found
+
+    def total_product_count(self):
+        """Products here plus in every subcategory — what a section shows."""
+        return sum(len(node.products) for node in self.descendants())
+
+    def preview_image(self):
+        """A photo for the tile: the first product in the branch that has one."""
+        for node in self.descendants():
+            for product in node.products:
+                if product.image:
+                    return product.image
+        return None
+
+    def path(self):
+        """From the root down to this category, for breadcrumbs."""
+        chain, node = [], self
+        seen = set()
+        while node is not None and node.id not in seen:
+            seen.add(node.id)
+            chain.append(node)
+            node = node.parent
+        return list(reversed(chain))
+
+    def to_dict(self, with_children=False):
+        data = {
             'id': self.id,
             'name': self.name,
             'slug': self.slug,
             'description': self.description,
             'icon': self.icon,
-            'product_count': len(self.products)
+            'parent_id': self.parent_id,
+            'sort_order': self.sort_order,
+            # own products, and the total including subcategories
+            'product_count': len(self.products),
+            'total_count': self.total_product_count(),
+            'has_children': bool(self.children),
+            'image': self.icon or self.preview_image(),
         }
+
+        if with_children:
+            data['children'] = [child.to_dict(with_children=True) for child in self.children]
+
+        return data
 
 class Brand(db.Model):
     __tablename__ = 'brands'

@@ -7,6 +7,7 @@ from models import (db, Product, Category, Brand, ProductImage, ProductVideo,
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import re
 import secrets
 from datetime import datetime, timedelta
 from functools import wraps
@@ -271,11 +272,33 @@ def extract_embedded_images(file_bytes, sheet_title):
 
 # ===== PUBLIC ROUTES =====
 
+def ordered_children(parent_id):
+    return (Category.query.filter_by(parent_id=parent_id)
+            .order_by(Category.sort_order, Category.name).all())
+
 @app.route('/api/categories', methods=['GET'])
 def get_categories():
-    """Get all product categories"""
-    categories = Category.query.all()
-    return jsonify([cat.to_dict() for cat in categories])
+    """The catalogue tree, in the order the admin arranged it.
+
+    ?flat=1 returns every category in one list, which is what the older
+    screens expect."""
+    if request.args.get('flat'):
+        categories = Category.query.order_by(Category.sort_order, Category.name).all()
+        return jsonify([category.to_dict() for category in categories])
+
+    return jsonify([category.to_dict(with_children=True)
+                    for category in ordered_children(None)])
+
+@app.route('/api/categories/<int:category_id>', methods=['GET'])
+def get_category(category_id):
+    """One category with its subcategories and the path back to the root"""
+    category = Category.query.get_or_404(category_id)
+    return jsonify({
+        **category.to_dict(),
+        'path': [node.to_dict() for node in category.path()],
+        'children': [child.to_dict() for child in
+                     ordered_children(category.id)],
+    })
 
 @app.route('/api/brands', methods=['GET'])
 def get_brands():
@@ -296,7 +319,11 @@ def get_products():
     query = Product.query.filter_by(is_active=True)
 
     if category_id:
-        query = query.filter_by(category_id=category_id)
+        # A section shows what its subcategories hold too, or opening
+        # «Фитинги» would come back empty once everything sits one level down
+        category = Category.query.get(category_id)
+        branch = [node.id for node in category.descendants()] if category else [category_id]
+        query = query.filter(Product.category_id.in_(branch))
 
     if brand_id:
         query = query.filter_by(brand_id=brand_id)
@@ -603,27 +630,135 @@ def delete_product_video(product_id, video_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
+TRANSLIT = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
+    'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+}
+
+def make_slug(name):
+    """A readable address for a Russian name, unique across the catalogue."""
+    base = ''.join(TRANSLIT.get(char, char) for char in (name or '').lower())
+    base = re.sub(r'[^a-z0-9]+', '-', base).strip('-') or 'category'
+
+    slug, suffix = base, 2
+    while Category.query.filter_by(slug=slug).first():
+        slug = f'{base}-{suffix}'
+        suffix += 1
+    return slug
+
+def next_sort_order(parent_id):
+    last = (db.session.query(db.func.max(Category.sort_order))
+            .filter(Category.parent_id.is_(parent_id) if parent_id is None
+                    else Category.parent_id == parent_id).scalar())
+    return (last or 0) + 10
+
+def would_loop(category, new_parent_id):
+    """A category cannot be moved inside one of its own subcategories."""
+    if new_parent_id is None:
+        return False
+    return new_parent_id in {node.id for node in category.descendants()}
+
 @app.route('/api/admin/categories', methods=['GET', 'POST'])
 @require_admin
 def admin_categories():
-    """Manage categories"""
+    """The catalogue tree: read it whole, or add a node to it"""
     if request.method == 'GET':
-        categories = Category.query.all()
-        return jsonify([cat.to_dict() for cat in categories])
+        if request.args.get('flat'):
+            categories = Category.query.order_by(Category.sort_order, Category.name).all()
+            return jsonify([category.to_dict() for category in categories])
 
-    data = request.get_json()
+        return jsonify([category.to_dict(with_children=True)
+                        for category in ordered_children(None)])
+
+    data = request.get_json() or {}
+    name = str(data.get('name', '')).strip()
+    if not name:
+        return jsonify({'error': 'Название категории не может быть пустым'}), 400
+
+    parent_id = data.get('parent_id') or None
+    if parent_id and not Category.query.get(parent_id):
+        return jsonify({'error': 'Родительская категория не найдена'}), 400
+
     try:
         category = Category(
-            name=data['name'],
-            slug=data.get('slug', data['name'].lower().replace(' ', '-')),
-            description=data.get('description', '')
+            name=name[:100],
+            slug=make_slug(data.get('slug') or name),
+            description=data.get('description', ''),
+            parent_id=parent_id,
+            sort_order=next_sort_order(parent_id),
         )
         db.session.add(category)
         db.session.commit()
         return jsonify(category.to_dict()), 201
-    except Exception as e:
+    except Exception as error:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 400
+        return jsonify({'error': str(error)}), 400
+
+@app.route('/api/admin/categories/<int:category_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def admin_category(category_id):
+    """Rename a category, move it under another one, or remove it"""
+    category = Category.query.get_or_404(category_id)
+
+    if request.method == 'DELETE':
+        if category.children:
+            return jsonify({'error': 'Сначала удалите или перенесите подкатегории'}), 400
+        if category.products:
+            return jsonify({
+                'error': f'В категории {len(category.products)} товаров — '
+                         'перенесите их в другую категорию'}), 400
+
+        db.session.delete(category)
+        db.session.commit()
+        return '', 204
+
+    data = request.get_json() or {}
+
+    if 'name' in data:
+        name = str(data['name']).strip()
+        if not name:
+            return jsonify({'error': 'Название категории не может быть пустым'}), 400
+        category.name = name[:100]
+
+    if 'description' in data:
+        category.description = data['description']
+
+    if 'parent_id' in data:
+        parent_id = data['parent_id'] or None
+        if parent_id == category.id or would_loop(category, parent_id):
+            return jsonify({'error': 'Категорию нельзя вложить саму в себя'}), 400
+        if parent_id and not Category.query.get(parent_id):
+            return jsonify({'error': 'Родительская категория не найдена'}), 400
+
+        if parent_id != category.parent_id:
+            category.parent_id = parent_id
+            category.sort_order = next_sort_order(parent_id)
+
+    db.session.commit()
+    return jsonify(category.to_dict())
+
+@app.route('/api/admin/categories/order', methods=['PUT'])
+@require_admin
+def admin_categories_order():
+    """Store the order the admin dragged the siblings into"""
+    data = request.get_json() or {}
+    ids = data.get('ids')
+    if not isinstance(ids, list):
+        return jsonify({'error': 'Ожидается список id в нужном порядке'}), 400
+
+    categories = {category.id: category for category
+                  in Category.query.filter(Category.id.in_(ids)).all()}
+
+    for position, category_id in enumerate(ids):
+        category = categories.get(category_id)
+        if category:
+            category.sort_order = (position + 1) * 10
+
+    db.session.commit()
+    return jsonify({'updated': len(categories)})
 
 @app.route('/api/admin/brands', methods=['GET', 'POST'])
 @require_admin
@@ -1196,9 +1331,78 @@ def internal_error(error):
     db.session.rollback()
     return jsonify({'error': 'Internal server error'}), 500
 
+# ===== SCHEMA MIGRATION =====
+#
+# The database on the server was created before categories had a parent, so it
+# is brought forward in place rather than by hand. Every step checks first and
+# does nothing when it has already run, so a restart is harmless.
+
+CATEGORIES_TABLE = """
+    CREATE TABLE categories_migrated (
+        id INTEGER NOT NULL PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        slug VARCHAR(100),
+        description TEXT,
+        icon VARCHAR(255),
+        parent_id INTEGER REFERENCES categories(id),
+        sort_order INTEGER DEFAULT 0,
+        UNIQUE (slug)
+    )
+"""
+
+def column_names(connection, table):
+    rows = connection.exec_driver_sql(f'PRAGMA table_info({table})').fetchall()
+    return {row[1] for row in rows}
+
+def name_is_unique(connection):
+    """True while the old UNIQUE(name) is still on the table."""
+    for index in connection.exec_driver_sql('PRAGMA index_list(categories)').fetchall():
+        if not index[2]:  # not unique
+            continue
+        columns = connection.exec_driver_sql(f'PRAGMA index_info("{index[1]}")').fetchall()
+        if [column[2] for column in columns] == ['name']:
+            return True
+    return False
+
+def ensure_schema():
+    """Bring an existing database up to the current model."""
+    inspector = db.inspect(db.engine)
+    if 'categories' not in inspector.get_table_names():
+        return
+
+    with db.engine.begin() as connection:
+        existing = column_names(connection, 'categories')
+
+        for column, definition in (('parent_id', 'INTEGER REFERENCES categories(id)'),
+                                   ('sort_order', 'INTEGER DEFAULT 0')):
+            if column not in existing:
+                connection.exec_driver_sql(
+                    f'ALTER TABLE categories ADD COLUMN {column} {definition}')
+                print(f'Схема: добавлен столбец categories.{column}')
+
+        # A subcategory called «Прямые» may exist under more than one section,
+        # so the name is no longer unique across the whole table. SQLite cannot
+        # drop a constraint, so the table is rebuilt once.
+        if name_is_unique(connection):
+            connection.exec_driver_sql('PRAGMA foreign_keys=OFF')
+            connection.exec_driver_sql(CATEGORIES_TABLE)
+            connection.exec_driver_sql(
+                'INSERT INTO categories_migrated '
+                '(id, name, slug, description, icon, parent_id, sort_order) '
+                'SELECT id, name, slug, description, icon, parent_id, sort_order FROM categories')
+            connection.exec_driver_sql('DROP TABLE categories')
+            connection.exec_driver_sql('ALTER TABLE categories_migrated RENAME TO categories')
+            connection.exec_driver_sql(
+                'CREATE INDEX IF NOT EXISTS ix_categories_parent_id ON categories (parent_id)')
+            connection.exec_driver_sql(
+                'CREATE INDEX IF NOT EXISTS ix_categories_sort_order ON categories (sort_order)')
+            connection.exec_driver_sql('PRAGMA foreign_keys=ON')
+            print('Схема: имя категории больше не обязано быть уникальным на весь каталог')
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+        ensure_schema()
         print("Database initialized!")
 
     # Debug must be opted into: the Werkzeug debugger hands an interactive Python
