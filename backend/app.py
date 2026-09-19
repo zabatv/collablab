@@ -1382,6 +1382,9 @@ SHEET_CATEGORIES = 'Категории'
 SHEET_BRANDS = 'Бренды'
 SHEET_BANNERS = 'Слайдер'
 
+# Longer than this and it is a sentence, not a name
+BRAND_NAME_LIMIT = 60
+
 def uploaded_file_path(stored):
     """Absolute path of something under /uploads, or None if it is not there."""
     if not stored or not stored.startswith('/uploads/'):
@@ -1560,6 +1563,14 @@ def import_brands_sheet(wb, file_bytes, report):
         if not name:
             continue
 
+        # A sentence in the name column is a note somebody typed into the
+        # sheet, not a brand. Left alone it became a brand of its own, with
+        # the whole note for a name.
+        if len(name) > BRAND_NAME_LIMIT:
+            report['errors'].append(
+                f'Бренды, строка {row}: слишком длинное название — пропущено')
+            continue
+
         brand = Brand.query.filter(db.func.lower(Brand.name) == name.lower()).first()
 
         if not brand:
@@ -1600,6 +1611,14 @@ def import_categories_sheet(wb, file_bytes, report):
     for row, values in rows:
         path = cell_text(values, 1)
         if not path:
+            continue
+
+        # The same trap as in the brands sheet: a note typed into the path
+        # column would otherwise become a category named after the note
+        if any(len(part.strip()) > BRAND_NAME_LIMIT
+               for part in path.split(PATH_SEPARATOR)):
+            report['errors'].append(
+                f'Категории, строка {row}: слишком длинное название — пропущено')
             continue
 
         # The path is the key; the id only says that a row was renamed, and
