@@ -836,6 +836,13 @@ header {
   margin-bottom: var(--space-2xl);
 }
 
+/* Eight per category, so the home page wants a column count that divides it:
+   a wider minimum lands on four columns where the catalogue lands on five,
+   and the row below it fills instead of trailing off half-empty */
+.category-section .grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+}
+
 .category-section-header {
   display: flex;
   align-items: baseline;
@@ -1847,7 +1854,9 @@ footer {
   }
 
   .grid-3,
-  .grid-4 {
+  .grid-4,
+  /* The home page's wider minimum would leave one card per row on a phone */
+  .category-section .grid {
     grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
     gap: var(--space-xs);
   }
