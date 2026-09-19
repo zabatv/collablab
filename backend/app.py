@@ -272,6 +272,60 @@ def extract_embedded_images(file_bytes, sheet_title):
 
 # ===== PUBLIC ROUTES =====
 
+# ===== CATEGORY PATHS =====
+# A spreadsheet cell has to carry the whole branch, not just the last name.
+# Written as «Фитинги / Заглушки», it survives the trip out and back; written
+# as «Заглушки» it does not, because that name means nothing on its own —
+# importing it built a new section beside Фитинги instead of finding the
+# subcategory inside it, and the tree came back flat.
+
+PATH_SEPARATOR = ' / '
+
+# The spaces around the slash are what make it a separator. A bare slash is
+# part of a name here — «Распределители 3/2», «Фитинг 1/4» — and splitting on
+# it tore those in half, leaving a stray «Распределители 3» behind.
+PATH_SPLIT = re.compile(r'\s+[/>|»]\s+')
+
+def category_path_name(category):
+    """«Фитинги / Заглушки» — the whole way down to this category"""
+    return PATH_SEPARATOR.join(node.name for node in category.path())
+
+def resolve_category_path(text):
+    """Find the category a path names, creating whatever is missing.
+
+    A bare name with no separator comes from an older file: it is looked up
+    anywhere in the tree, preferring a subcategory, so re-importing such a
+    file lands the products where they already live instead of flattening
+    the catalogue."""
+    parts = [part for part in PATH_SPLIT.split(str(text or '')) if part.strip()]
+    if not parts:
+        return None
+
+    if len(parts) == 1:
+        found = (Category.query.filter_by(name=parts[0])
+                 .order_by(Category.parent_id.is_(None), Category.id).first())
+        if found:
+            return found
+
+    parent = None
+    for part in parts:
+        parent_id = parent.id if parent else None
+        node = Category.query.filter_by(name=part[:100], parent_id=parent_id).first()
+
+        if not node:
+            node = Category(
+                name=part[:100],
+                slug=make_slug(part if parent is None else f'{parent.name} {part}'),
+                parent_id=parent_id,
+                sort_order=next_sort_order(parent_id),
+            )
+            db.session.add(node)
+            db.session.flush()
+
+        parent = node
+
+    return parent
+
 def ordered_children(parent_id):
     return (Category.query.filter_by(parent_id=parent_id)
             .order_by(Category.sort_order, Category.name).all())
@@ -1187,7 +1241,8 @@ def export_excel():
             '',
             product.description or '',
             format_specifications(product.specifications),
-            product.category.name if product.category else '',
+            # The whole branch, so importing the file back keeps the tree
+            category_path_name(product.category) if product.category else '',
             product.brand.name if product.brand else '',
             product.price,
             product.old_price or '',
@@ -1344,19 +1399,13 @@ def import_excel():
                 continue
 
             try:
-                # Get or create category
+                # The cell holds a path — «Фитинги / Заглушки» — so the
+                # product lands inside its section rather than beside it
                 category = None
                 if category_col:
                     category_name = str(ws.cell(row=row, column=category_col).value or '').strip()
                     if category_name:
-                        category = Category.query.filter_by(name=category_name).first()
-                        if not category:
-                            category = Category(
-                                name=category_name,
-                                slug=category_name.lower().replace(' ', '-')
-                            )
-                            db.session.add(category)
-                            db.session.flush()
+                        category = resolve_category_path(category_name)
 
                 # Get or create brand
                 brand = None
