@@ -73,6 +73,11 @@
   // transition do the same job here without pulling in a library
   const seen = new WeakSet();
   const observer = new IntersectionObserver(entries => {
+    // Several blocks usually come into view together — on the first screen,
+    // all of them at once. Revealed at the same instant they read as one
+    // flat jump, so each one waits a little longer than the one above it.
+    let inBatch = 0;
+
     entries.forEach(entry => {
       if (!entry.isIntersecting || seen.has(entry.target)) return;
       seen.add(entry.target);
@@ -80,9 +85,29 @@
 
       if (entry.target.dataset.countTo !== undefined) {
         countUp(entry.target);
-      } else {
-        entry.target.classList.add('is-revealed');
+        return;
       }
+
+      // Four deep the wait is already long enough to feel like a delay
+      const step = Math.min(inBatch, 4) * 90;
+      inBatch += 1;
+
+      if (step) {
+        entry.target.style.transitionDelay = `${step}ms`;
+        // Custom properties inherit, so whatever is inside the block —
+        // the tiles of a catalogue section — waits for the block itself
+        // before starting its own stagger
+        entry.target.style.setProperty('--reveal-delay', `${step}ms`);
+      }
+
+      entry.target.classList.add('is-revealed');
+
+      // Left in place they would also slow down anything the block
+      // transitions later, such as folding it shut by hand
+      setTimeout(() => {
+        entry.target.style.transitionDelay = '';
+        entry.target.style.removeProperty('--reveal-delay');
+      }, step + 900);
     });
   }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
 

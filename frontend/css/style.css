@@ -880,6 +880,13 @@ header {
   box-shadow: var(--shadow-md);
 }
 
+/* A section is a bigger thing than a card, so it arrives from further down
+   and settles from slightly under size */
+.section-block.reveal {
+  transform: translateY(22px) scale(0.985);
+  transition-duration: 520ms;
+}
+
 .section-head-bar {
   width: 100%;
   display: flex;
@@ -894,7 +901,13 @@ header {
   text-align: left;
   cursor: pointer;
   position: relative;
-  transition: background-color var(--quick) ease;
+  transition: background-color var(--quick) ease, transform var(--press) var(--ease-out);
+}
+
+/* The bar gives under the finger, so a tap is answered before the fold
+   has had time to move */
+.section-head-bar:active {
+  transform: scale(0.994);
 }
 
 /* A hairline of accent under the bar, drawn on only while it is open */
@@ -1025,7 +1038,9 @@ header {
 .section-body .tile {
   opacity: 0;
   transform: translateY(12px);
-  transition-delay: calc(var(--i, 0) * 28ms);
+  /* --reveal-delay is set on the block while it is coming into view, so the
+     tiles start once their section has arrived rather than under it */
+  transition-delay: calc(var(--reveal-delay, 0ms) + var(--i, 0) * 28ms);
 }
 
 .section-block.is-revealed .section-body[data-open="true"] .tile {
