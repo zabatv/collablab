@@ -47,6 +47,8 @@
       <a href="index.html">Главная</a>
       <span>/</span>
       <a href="catalog.html">Каталог</a>
+      <!-- The раздел and подкатегория are filled in once the товар is loaded -->
+      <span id="breadcrumb-path"></span>
       <span>/</span>
       <span class="breadcrumb-current" id="breadcrumb-product">Товар</span>
     </nav>
@@ -132,6 +134,8 @@
 
         currentProduct = await ProductAPI.getProduct(productId);
         renderProduct();
+        loadVariants(productId);
+        loadCategoryPath();
         loadRelatedProducts();
 
         // Counted for the admin statistics; failure here must not affect the page
@@ -139,6 +143,58 @@
       } catch (error) {
         console.error('Error loading product:', error);
         el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p>Возможно, позицию сняли с продажи.</p><a class="btn btn-secondary" href="catalog.html">Вернуться в каталог</a></div>';
+      }
+    }
+
+    // A subcategory holds the same part in several sizes. They are separate
+    // products, so switching size is following a link — but the buyer should
+    // see the sizes without going back to the list first.
+    async function loadVariants(productId) {
+      let variants = [];
+      try {
+        variants = await ProductAPI.getVariants(productId);
+      } catch (error) {
+        // Without the list the page still sells the товар it is about
+        console.error('Error loading variants:', error);
+        return;
+      }
+
+      const host = el('#product-variants');
+      if (!host || variants.length < 2) return;
+
+      const current = variants.find(variant => variant.current);
+      host.innerHTML = `
+        <div class="variants">
+          <div class="variants-label">
+            Исполнения <span class="text-muted">(${variants.length})</span>
+          </div>
+          <div class="variants-row">
+            ${variants.map(variant => `
+              <a class="variant${variant.current ? ' variant-current' : ''}"
+                 href="product.html?id=${variant.id}"
+                 ${variant.current ? 'aria-current="true"' : ''}>
+                <span class="variant-name">${escapeHtml(variant.label)}</span>
+                <span class="variant-price num">${formatPrice(variant.price)}</span>
+              </a>`).join('')}
+          </div>
+          ${current ? '' : '<p class="text-muted variants-hint">Текущая позиция в списке не показана</p>'}
+        </div>`;
+    }
+
+    // The trail down the tree: Каталог / Фитинги / Угловые / этот товар
+    async function loadCategoryPath() {
+      const categoryId = currentProduct?.category?.id;
+      const host = el('#breadcrumb-path');
+      if (!categoryId || !host) return;
+
+      try {
+        const category = await ProductAPI.getCategory(categoryId);
+        host.innerHTML = (category.path || []).map(node => `
+          <span>/</span>
+          <a href="catalog.html?category=${node.id}">${escapeHtml(node.name)}</a>
+        `).join('');
+      } catch (error) {
+        console.error('Error loading category path:', error);
       }
     }
 
@@ -191,6 +247,9 @@
                 <div class="product-meta-value">${escapeHtml(product.category?.name || '—')}</div>
               </div>
             </div>
+
+            <!-- The same part in its other sizes, filled once they arrive -->
+            <div id="product-variants"></div>
 
             <div class="product-buy">
               <div class="product-price">

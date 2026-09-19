@@ -366,6 +366,92 @@ def get_product(product_id):
     product = Product.query.get_or_404(product_id)
     return jsonify(product.to_dict(full=True))
 
+# ===== VARIANTS =====
+# A subcategory usually holds one part in several sizes: the same fitting
+# with a 1/8, 1/4, 3/8 and 1/2 thread. The supplier writes them as separate
+# products, and their names differ in exactly one comma-separated piece.
+# That piece is what a buyer is choosing between, so it becomes the label
+# on the switch at the top of the product page.
+
+def name_family(name):
+    """The part of the name before the first comma — «Фитинг угловой ...»"""
+    return (name or '').split(',')[0].strip().lower()
+
+def variant_labels(names):
+    """For each name, what is left once the words they all share are removed.
+
+    The supplier writes «Фитинг угловой ..., 8-6 мм x R 1/4 ..., T=...» — the
+    opening and the closing conditions repeat, and only the middle changes.
+    Cutting the shared head and tail away leaves exactly the size, however
+    many commas the middle happens to contain. An empty label means the
+    names differ in nothing showable, and the caller falls back to the
+    article number."""
+    words = [(name or '').split() for name in names]
+
+    head = 0
+    while (all(len(row) > head for row in words)
+           and len({row[head] for row in words}) == 1):
+        head += 1
+
+    tail = 0
+    while (all(len(row) > head + tail for row in words)
+           and len({row[-1 - tail] for row in words}) == 1):
+        tail += 1
+
+    return [' '.join(row[head:len(row) - tail]).strip(' ,;-') for row in words]
+
+# 6 мм has to come before 10 мм, and the thread 1/8 before 1/4, so numbers
+# sort as numbers and fractions as their value rather than as text
+NUMBERS = re.compile(r'(\d+\s*/\s*\d+|\d+(?:[.,]\d+)?)')
+
+def as_number(part):
+    try:
+        if '/' in part:
+            top, bottom = part.split('/')
+            return float(top) / float(bottom)
+        return float(part.replace(',', '.'))
+    except (ValueError, ZeroDivisionError):
+        # Sorting must never be the thing that breaks a product page
+        return 0.0
+
+def natural_key(text):
+    parts = NUMBERS.split(text or '')
+    return [as_number(part) if NUMBERS.fullmatch(part) else part.lower()
+            for part in parts]
+
+@app.route('/api/products/<int:product_id>/variants', methods=['GET'])
+def get_product_variants(product_id):
+    """The same part in its other sizes, from the same subcategory"""
+    product = Product.query.get_or_404(product_id)
+    family = name_family(product.name)
+
+    siblings = [item for item
+                in Product.query.filter_by(category_id=product.category_id,
+                                           is_active=True).all()
+                if name_family(item.name) == family]
+
+    # Alone in its family there is nothing to choose between
+    if len(siblings) < 2:
+        return jsonify([])
+
+    labels = variant_labels([item.name for item in siblings])
+
+    # Two variants reading the same on the switch would be a trap, so a
+    # repeated label carries its article number
+    seen = [labels.count(label) for label in labels]
+    variants = [{
+        'id': item.id,
+        'sku': item.sku,
+        'label': (f'{label} ({item.sku})' if label and count > 1
+                  else label or item.sku),
+        'price': item.price,
+        'in_stock': item.stock > 0,
+        'current': item.id == product.id,
+    } for item, label, count in zip(siblings, labels, seen)]
+
+    variants.sort(key=lambda variant: natural_key(variant['label']))
+    return jsonify(variants)
+
 @app.route('/api/track/view/<int:product_id>', methods=['POST'])
 def track_view(product_id):
     """Count a product page opening. Nothing about the visitor is stored."""

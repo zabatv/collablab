@@ -139,6 +139,9 @@ const ProductAPI = {
 
   getProduct: (id) => apiCall(`/products/${id}`),
 
+  // The same part in its other sizes, from the same subcategory
+  getVariants: (id) => apiCall(`/products/${id}/variants`),
+
   search: (query) => apiCall(`/products/search?q=${encodeURIComponent(query)}`),
 
   // The tree: every section with its subcategories nested inside
