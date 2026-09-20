@@ -176,12 +176,8 @@
         clear(sections);
         sectionHandles.length = 0;
 
-        // Everything stands open unless this browser was left with something
-        // folded away: the catalogue shows what it has, and the bars are
-        // there for putting aside what you are not looking at
-        const folded = foldedSections();
         filled.forEach(section =>
-          renderSection(sections, section, !folded.has(section.id)));
+          renderSection(sections, section, sectionStartsOpen(section.id)));
 
         wireToggleAll();
       } catch (error) {
@@ -318,22 +314,40 @@
        Only the ids of the sections put aside, and only in this browser.
        Private mode and blocked site data both make it throw, and a
        catalogue must open either way. */
-    const FOLD_KEY = 'folded-sections';
+    const FOLD_KEY = 'folded-sections';   // что закрыли на большом экране
+    const OPEN_KEY = 'opened-sections';   // что открыли на телефоне
 
-    function foldedSections() {
+    // На большом экране разделы стоят открытыми: каталог сразу показывает,
+    // что в нём есть, а полосы нужны, чтобы убрать лишнее. На телефоне
+    // наоборот — одиннадцать открытых разделов превращают главную в ленту
+    // на десяток экранов, и до нужного не долистать.
+    const onPhone = () => window.matchMedia('(max-width: 640px)').matches;
+
+    function storedSet(key) {
       try {
-        const stored = JSON.parse(localStorage.getItem(FOLD_KEY) || '[]');
+        const stored = JSON.parse(localStorage.getItem(key) || '[]');
         return new Set(Array.isArray(stored) ? stored : []);
       } catch (error) {
         return new Set();
       }
     }
 
+    const foldedSections = () => storedSet(FOLD_KEY);
+
+    function sectionStartsOpen(id) {
+      return onPhone() ? storedSet(OPEN_KEY).has(id) : !storedSet(FOLD_KEY).has(id);
+    }
+
     function rememberFold(id, open) {
+      // На телефоне запоминается открытое, на большом экране — закрытое:
+      // помнить стоит то, что расходится с обычным видом страницы
+      const key = onPhone() ? OPEN_KEY : FOLD_KEY;
+      const listed = storedSet(key);
+
+      (onPhone() ? open : !open) ? listed.add(id) : listed.delete(id);
+
       try {
-        const folded = foldedSections();
-        open ? folded.delete(id) : folded.add(id);
-        localStorage.setItem(FOLD_KEY, JSON.stringify([...folded]));
+        localStorage.setItem(key, JSON.stringify([...listed]));
       } catch (error) {
         // Remembering is a convenience; losing it changes nothing
       }
