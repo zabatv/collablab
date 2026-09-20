@@ -5,6 +5,10 @@ const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
   ? `${window.location.protocol}//${window.location.hostname}:5000/api`
   : 'http://45.143.93.41:5000/api';
 
+// Which backend serves the site. js/config.js holds the switch; the pages
+// below never ask, they call ProductAPI and AdminAPI as they always did.
+const ON_NODE = (window.SHOP_CONFIG || {}).backend === 'node';
+
 // The browser holds a session token, never the password
 const TOKEN_KEY = 'admin_token';
 
@@ -13,7 +17,8 @@ function adminToken() {
 }
 
 function authHeader() {
-  return { 'Authorization': `Bearer ${adminToken()}` };
+  // Their admin server speaks HTTP Basic, ours a session token
+  return ON_NODE ? NodeAPI.basicHeader() : { 'Authorization': `Bearer ${adminToken()}` };
 }
 
 const AuthAPI = {
