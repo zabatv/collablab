@@ -10,7 +10,7 @@
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261012">
 </head>
 <body>
   <!-- Header -->
@@ -167,12 +167,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261011"></script>
-  <script src="js/adapter-node.js?v=20261011"></script>
-  <script src="js/api.js?v=20261011"></script>
-  <script src="js/main.js?v=20261011"></script>
-  <script src="js/effects.js?v=20261011"></script>
-  <script src="js/consent.js?v=20261011"></script>
+  <script src="js/config.js?v=20261012"></script>
+  <script src="js/adapter-node.js?v=20261012"></script>
+  <script src="js/api.js?v=20261012"></script>
+  <script src="js/main.js?v=20261012"></script>
+  <script src="js/effects.js?v=20261012"></script>
+  <script src="js/consent.js?v=20261012"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -346,57 +346,34 @@
       lead.hidden = !lead.textContent;
     }
 
-    // Finds a category anywhere in the tree already in hand, so walking up
-    // to the neighbours costs no request
-    function findInTree(id, nodes = categoryTree) {
-      for (const node of nodes) {
-        if (node.id === id) return node;
-        const found = findInTree(id, node.children || []);
-        if (found) return found;
-      }
-      return null;
-    }
-
-    /* A section shows what is under it before it shows the parts themselves.
-       A subcategory has nothing under it — there it shows the subcategories
-       beside it, with itself marked, so the neighbouring sizes and types are
-       one click away instead of a trip back to the section. */
+    /* Раздел сначала показывает, что под ним, и только потом товары.
+       У подкатегории под ней ничего нет — там сразу список: соседние
+       размеры и исполнения видны в дереве слева, а стена плиток на весь
+       экран только отодвигала вниз то, за чем человек пришёл. */
     function renderSubcategories() {
       const block = el('#subcategories');
       const grid = el('#subcategory-grid');
       const heading = el('#subcat-heading');
 
-      let tiles = openCategory?.children || [];
-      let title = 'Подкатегории';
+      const tiles = openCategory?.children || [];
 
-      if (openCategory && !tiles.length) {
-        const path = openCategory.path || [];
-        const parent = path.length > 1 ? findInTree(path[path.length - 2].id) : null;
-        tiles = parent?.children || [];
-        title = parent ? parent.name : title;
-      }
-
-      // A subcategory with no neighbours has nothing to offer here
-      block.hidden = tiles.length < 2;
+      // Ни одной подкатегории — показывать нечего
+      block.hidden = tiles.length === 0;
       if (block.hidden) return;
 
-      heading.textContent = title;
+      heading.textContent = 'Подкатегории';
 
       // --i staggers the entrance; the animation is in the stylesheet
-      grid.innerHTML = tiles.map((child, index) => {
-        const current = child.id === openCategory?.id;
-        return `
-        <a class="tile tile-enter${current ? ' tile-current' : ''}"
-           href="catalog.html?category=${child.id}"
-           style="--i: ${index}"${current ? ' aria-current="page"' : ''}>
+      grid.innerHTML = tiles.map((child, index) => `
+        <a class="tile tile-enter" href="catalog.html?category=${child.id}"
+           style="--i: ${index}">
           <span class="tile-image">
             <img src="${escapeHtml(child.image || NO_IMAGE)}" alt=""
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
           </span>
           <span class="tile-name">${escapeHtml(child.name)}</span>
           <span class="tile-count num">${child.total_count}</span>
-        </a>`;
-      }).join('');
+        </a>`).join('');
     }
 
     async function applyFilters() {

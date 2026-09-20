@@ -1170,17 +1170,6 @@ header {
   mix-blend-mode: multiply;
 }
 
-/* The one you are already looking at, among its neighbours */
-.tile-current {
-  border-color: var(--ink);
-  box-shadow: var(--shadow-md);
-  cursor: default;
-}
-
-.tile-current .tile-name {
-  color: var(--accent);
-}
-
 .tile:active {
   transform: scale(0.98);
   transition-delay: 0s;
@@ -1992,6 +1981,14 @@ td.ptable-price {
 .spec-table td:last-child {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* Значение, у которого 1С не дала названия параметра, занимает всю строку:
+   пустая ячейка слева читалась бы как потерянные данные */
+.spec-table td.spec-bare {
+  width: auto;
+  color: var(--ink);
+  font-weight: 500;
 }
 
 /* ===== VIDEO ===== */

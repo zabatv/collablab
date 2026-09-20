@@ -324,6 +324,91 @@ const NodeAPI = (() => {
   const withBase = (url) =>
     url && url.startsWith('/') ? `${mediaBase()}${url}` : url;
 
+  /* ---------- характеристики из названия ---------- */
+
+  /* 1С отдаёт характеристики не полями, а одной строкой:
+     «(-0,6...6 бар) Реле давления, диф.=0,6...4 бар, Рмакс=16 бар,
+     (-10...+110С), G1/4, 8А». Имя параметра там есть далеко не у каждого
+     куска, поэтому кусок без имени показывается целиком: придумывать
+     названия («8А» — это ток или напряжение?) в техническом каталоге
+     дороже, чем оставить ровно так, как написал поставщик. */
+  /* Запятая делит строку только снаружи скобок и только если за ней стоит
+     пробел. Иначе разлетаются и дробные числа («0,6»), и диапазоны внутри
+     скобок («T=(0...+60)°C» — это один параметр, а не три). */
+  function splitTop(text) {
+    const parts = [];
+    let depth = 0;
+    let start = 0;
+
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === '(') depth++;
+      else if (text[i] === ')') depth = Math.max(0, depth - 1);
+      else if (text[i] === ',' && depth === 0 && /\s/.test(text[i + 1] || '')) {
+        parts.push(text.slice(start, i));
+        start = i + 1;
+      }
+    }
+
+    parts.push(text.slice(start));
+    return parts;
+  }
+
+  function specsFromName(name) {
+    // Пробелы приводятся к одному так же, как в splitName: иначе кусок из
+    // названия не совпадёт с заголовком страницы и удвоится строкой таблицы
+    const whole = String(name || '').replace(/\xa0/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Скобка со списком внутри — это перечисление, а не одно значение:
+    // «датчик (М12х1, PNP, IP67)» разворачивается в три строки
+    const parts = [];
+    splitTop(whole).forEach(part => {
+      const group = part.match(/^(.*?)\(([^()]*)\)(.*)$/);
+      const inside = group && splitTop(group[2]);
+
+      if (inside && inside.length > 1) {
+        parts.push(group[1], ...inside, group[3]);
+      } else {
+        parts.push(part);
+      }
+    });
+
+    // То, что уже стоит заголовком страницы, повторять строкой таблицы незачем
+    const heading = String(splitName(whole).title).trim().toLowerCase();
+
+    const clean = (part) => part
+      .trim()
+      // Одинокая скобка вокруг всего куска ничего не сообщает: «(-10...+110С)»
+      .replace(/^\((.*)\)$/, '$1')
+      .replace(/^[.;:,\s]+|[.;,\s]+$/g, '')
+      .trim();
+
+    return parts
+      .map(part => {
+        const text = clean(part);
+        // «(-0,6...6 бар) Реле давления» — название детали отрезается,
+        // диапазон остаётся: он и есть характеристика
+        const without = clean(text.toLowerCase().endsWith(heading)
+          ? text.slice(0, text.length - heading.length)
+          : text);
+        return heading && without !== text ? without : text;
+      })
+      // Заголовок страницы обрывается на первой запятой, поэтому кусок
+      // может быть его началом, а не всем целиком — такой тоже лишний
+      .filter(part => {
+        const lower = part.toLowerCase();
+        return part && lower !== heading
+          && !(lower.length >= 6 && heading.startsWith(lower));
+      })
+      .map(part => {
+        // «диф.=0,6...4 бар», «корпус - пластик» — имя параметра 1С дала сама
+        const named = part.match(/^([^=:]{1,24}?)\s*(?:[=:]|\s[-—]\s)\s*(.+)$/);
+        if (!named) return { name: '', value: part };
+
+        // «Pвх=(1...10) бар» — скобка вокруг диапазона ничего не добавляет
+        return { name: named[1], value: named[2].replace(/^\(([^()]*)\)/, '$1') };
+      });
+  }
+
   function adaptProduct(item) {
     if (!item) return null;
 
@@ -353,8 +438,9 @@ const NodeAPI = (() => {
       videos: videos.map(entry => ({
         id: entry.id, url: withBase(entry.url), title: '',
       })),
-      // Характеристик у них нет: только описание текстом
-      specifications: [],
+      // Полей с характеристиками у них нет — разбирается строка из 1С.
+      // Что заказчик вписал руками, перебьёт это в product().
+      specifications: specsFromName(item.name),
       updated_at: item.updated_at,
 
       // Служебные поля админки
@@ -595,12 +681,41 @@ const NodeAPI = (() => {
     return adaptList(data);
   }
 
+  // Характеристики, вписанные заказчиком. Ключ — артикул: он переживает
+  // любую перевыгрузку из 1С, а id товара — нет.
+  async function productSpecs(article) {
+    if (!siteBase() || !article) return [];
+    try {
+      const data = await call(siteBase(), `/specs/${encodeURIComponent(article)}`);
+      return data.rows || [];
+    } catch (error) {
+      console.warn('Характеристики недоступны:', error.message);
+      return [];
+    }
+  }
+
+  function saveProductSpecs(article, rows) {
+    if (!siteBase()) throw new Error('Сервис сайта не настроен');
+    return call(siteBase(), `/admin/specs/${encodeURIComponent(article)}`, {
+      method: 'PUT',
+      headers: basicHeader(),
+      body: { rows },
+    });
+  }
+
   async function product(id) {
     const [, item] = await Promise.all([
       brandMap(),
       readPublic(`/products/${id}`),
     ]);
-    return adaptProduct(item);
+
+    const adapted = adaptProduct(item);
+
+    // Вписанное руками важнее разобранного из наименования
+    const stored = await productSpecs(adapted?.sku);
+    if (stored.length) adapted.specifications = stored;
+
+    return adapted;
   }
 
   // Отбор по бренду их API не умеет — бренды не его. Поэтому фильтр,
@@ -744,7 +859,7 @@ const NodeAPI = (() => {
     brandMap, brandOf, brands, catalogue, looseKey,
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
-    categoryTexts, saveCategoryText,
+    categoryTexts, saveCategoryText, productSpecs, saveProductSpecs,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

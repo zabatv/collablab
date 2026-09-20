@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261011">
+  <link rel="stylesheet" href="css/style.css?v=20261012">
   <style>
     .admin-layout {
       display: grid;
@@ -2044,10 +2044,10 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20261011"></script>
-  <script src="js/adapter-node.js?v=20261011"></script>
-  <script src="js/api.js?v=20261011"></script>
-  <script src="js/main.js?v=20261011"></script>
+  <script src="js/config.js?v=20261012"></script>
+  <script src="js/adapter-node.js?v=20261012"></script>
+  <script src="js/api.js?v=20261012"></script>
+  <script src="js/main.js?v=20261012"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -2110,11 +2110,19 @@
             `<small class="form-hint">${why}</small>`);
         });
 
-      // Бренда и характеристик на той стороне нет — прятать целиком
-      ['#product-brand', '#spec-rows'].forEach(selector => {
-        const group = el(selector)?.closest('.form-group');
-        if (group) group.hidden = true;
-      });
+      // Бренда на той стороне нет — прятать целиком
+      const brandGroup = el('#product-brand')?.closest('.form-group');
+      if (brandGroup) brandGroup.hidden = true;
+
+      // Характеристики остаются: полей под них у них нет, но таблицу
+      // хранит наш сервис по артикулу
+      const specs = el('#spec-rows')?.closest('.form-group');
+      if (specs) {
+        specs.querySelector('label').insertAdjacentHTML('afterend',
+          '<small class="form-hint">Заполнено разбором наименования из 1С. ' +
+          'Исправленное хранится на сайте по артикулу и переживает ' +
+          'перевыгрузку. Стереть все строки — вернуться к разбору.</small>');
+      }
 
       el('#product-sku').insertAdjacentHTML('afterend',
         '<small class="form-hint">Введите артикул точно как в 1С, иначе цена ' +
@@ -3038,7 +3046,10 @@
           name: row.querySelector('.spec-name').value.trim(),
           value: row.querySelector('.spec-value').value.trim()
         }))
-        .filter(spec => spec.name && spec.value);
+        // Имя параметра необязательно: 1С сплошь и рядом даёт голое
+        // значение («IP67», «G1/4»), и терять его из-за пустой левой
+        // ячейки нельзя. Без значения строка пустая — её и выбрасываем.
+        .filter(spec => spec.value);
     }
 
     async function editProduct(id) {
@@ -3528,10 +3539,12 @@
       try {
         if (currentProductId) {
           await AdminAPI.updateProduct(currentProductId, data);
+          await saveSpecsBeside(data.sku, data.specifications);
           showNotification('Товар обновлён');
           loadProducts();
         } else {
           const product = await AdminAPI.createProduct(data);
+          await saveSpecsBeside(data.sku, data.specifications);
           // Claim the id before uploads, so a failed upload cannot lead to a duplicate on retry
           currentProductId = product.id;
           const queued = pendingMedia.images.length + pendingMedia.videos.length;
@@ -3550,6 +3563,19 @@
         showNotification('Ошибка: ' + error.message, 'error');
       }
     });
+
+    /* На их бэкенде характеристики едут не с товаром: полей под них там
+       нет, таблицу держит наш сервис по артикулу. Товар при этом уже
+       сохранён, поэтому отказ здесь — предупреждение, а не провал. */
+    async function saveSpecsBeside(article, rows) {
+      if (!ON_NODE) return;
+      try {
+        await AdminAPI.setSpecifications(article, rows);
+      } catch (error) {
+        showNotification('Товар сохранён, но характеристики не записались: '
+                         + error.message, 'error');
+      }
+    }
 
     async function deleteProduct(id) {
       if (confirm('Вы уверены?')) {

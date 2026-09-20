@@ -158,6 +158,27 @@ class CategoryText(db.Model):
         }
 
 
+# Характеристики товара. 1С отдаёт их одной строкой внутри наименования, а
+# полями — не отдаёт вовсе, поэтому сайт разбирает эту строку сам. Здесь
+# лежит то, что заказчик вписал руками: оно важнее разбора и переживает
+# любую перевыгрузку, потому что ключ — артикул, а не id товара.
+
+class ProductSpec(db.Model):
+    __tablename__ = 'product_specs'
+
+    article = db.Column(db.String(120), primary_key=True)   # ключ по loose()
+    shown_article = db.Column(db.String(120), default='')   # как написано в 1С
+    rows = db.Column(db.Text, default='[]')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        try:
+            rows = json.loads(self.rows or '[]')
+        except ValueError:
+            rows = []
+        return {'article': self.shown_article or self.article, 'rows': rows}
+
+
 # Посещаемость считается обезличенно: сколько раз открыли товар и что
 # искали. Ни адреса, ни идентификатора посетителя здесь нет.
 
@@ -274,6 +295,68 @@ def set_category_text(category_id):
         db.session.add(row)
 
     row.description = text
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
+
+
+@app.route('/specs/<path:article>')
+def product_specs(article):
+    """Характеристики одной позиции, если их вписали руками.
+
+    Пусто — витрина показывает то, что разобрала из наименования 1С."""
+    row = db.session.get(ProductSpec, loose(article))
+    return jsonify(row.to_dict() if row else {'article': article, 'rows': []})
+
+
+def clean_specs(raw):
+    """Строки таблицы: имя параметра может быть пустым, значение — нет."""
+    rows = []
+    for item in raw if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get('name') or '').strip()[:120]
+        value = str(item.get('value') or '').strip()[:500]
+        if value:
+            rows.append({'name': name, 'value': value})
+    return rows[:60]
+
+
+@app.route('/admin/specs/<path:article>', methods=['PUT', 'DELETE'])
+@require_admin
+def set_product_specs(article):
+    key = loose(article)
+    if not key:
+        return jsonify({'error': 'Пустой артикул'}), 400
+
+    row = db.session.get(ProductSpec, key)
+
+    if request.method == 'DELETE':
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+        return '', 204
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидался JSON с полем rows'}), 400
+
+    rows = clean_specs(data.get('rows'))
+
+    # Пустой список — это «вернуть как было», а не «показывать пусто»:
+    # иначе у товара пропала бы и таблица из 1С
+    if not rows:
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+        return jsonify({'article': article, 'rows': []})
+
+    if not row:
+        row = ProductSpec(article=key)
+        db.session.add(row)
+
+    row.shown_article = article[:120]
+    row.rows = json.dumps(rows, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify(row.to_dict())

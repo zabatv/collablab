@@ -51,7 +51,10 @@ function escapeHtml(value) {
 function splitName(name) {
   const text = String(name || '').replace(/\xa0/g, ' ').replace(/\s+/g, ' ').trim()
     .replace(/^\([^)]*\)\s*/, '');
-  const cut = text.indexOf(',');
+
+  // Запятая внутри числа не разделяет: иначе «РДД-2Р-0,2МПа» превращалось
+  // в заголовок «РДД-2Р-0», а остаток уезжал в строку характеристик
+  const cut = text.search(/,(?!\d)/);
 
   if (cut < 10) return { title: text, specs: '' };
   return { title: text.slice(0, cut), specs: text.slice(cut + 1).trim() };
