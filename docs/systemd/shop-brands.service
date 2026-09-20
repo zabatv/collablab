@@ -1,0 +1,27 @@
+# Сервис брендов: справочник и правила привязки к артикулам.
+# Каталог живёт на Windows, здесь только бренды.
+#
+#   cp docs/systemd/shop-brands.service /etc/systemd/system/
+#   sed -i "s/ЗАМЕНИТЕ_ПАРОЛЬ/<пароль как в .env на Windows>/" \
+#          /etc/systemd/system/shop-brands.service
+#   chmod 600 /etc/systemd/system/shop-brands.service
+#   systemctl daemon-reload && systemctl enable --now shop-brands
+#
+# Пароль обязан совпадать с ADMIN_PASSWORD на Windows: тогда в админке
+# один вход на оба сервера.
+
+[Unit]
+Description=ROBOT brands service
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/collablab/services/brands
+Environment=ADMIN_USER=admin
+Environment=ADMIN_PASSWORD=ЗАМЕНИТЕ_ПАРОЛЬ
+ExecStart=/var/www/collablab/.venv/bin/gunicorn --preload -w 2 -b 127.0.0.1:5001 app:app
+Restart=always
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
