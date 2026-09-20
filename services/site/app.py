@@ -22,15 +22,18 @@
 
 import base64
 import hmac
+import io
 import json
 import os
 import re
 import secrets
 import time
+import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from functools import wraps
+from xml.etree import ElementTree as ET
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
@@ -48,7 +51,7 @@ app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DATA_DIR}/brands.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 12 * 1024 * 1024  # картинки, не видео
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # картинки и выгрузки 1С
 
 db = SQLAlchemy(app)
 
@@ -721,6 +724,201 @@ def brand_for(article):
         if key.startswith(loose(rule.value)):
             return rule.brand_id
     return None
+
+
+
+# ===== выгрузка 1С =====
+
+# Хвост складской ячейки, который 1С дописывает к артикулу: « *3*7*34»
+CELL_TAIL = re.compile(r'\s+\*[\d*]+$')
+
+
+def tag(element):
+    """Имя узла без пространства имён: в CommerceML оно у каждого"""
+    return element.tag.rsplit('}', 1)[-1]
+
+
+def child_text(element, name):
+    for node in element:
+        if tag(node) == name:
+            return (node.text or '').strip()
+    return ''
+
+
+def parse_commerceml(data):
+    """Товары из import*.xml: артикул, название, описание, группа.
+
+    Читается только то, что нужно для заведения карточки. Владелец с ИНН,
+    реквизиты, налоги и прочее из файла не берутся вовсе.
+    """
+    root = ET.parse(io.BytesIO(data)).getroot()
+
+    groups = {}
+
+    def walk_groups(node, trail):
+        for child in node:
+            if tag(child) != 'Группа':
+                continue
+            name = child_text(child, 'Наименование')
+            path = trail + [name] if name else trail
+            ident = child_text(child, 'Ид')
+            if ident:
+                groups[ident] = ' / '.join(path)
+            for deeper in child:
+                if tag(deeper) == 'Группы':
+                    walk_groups(deeper, path)
+
+    # Классификатор лежит в <Классификатор><Группы>
+    for element in root.iter():
+        if tag(element) == 'Классификатор':
+            for node in element:
+                if tag(node) == 'Группы':
+                    walk_groups(node, [])
+
+    items = []
+    for element in root.iter():
+        if tag(element) != 'Товар':
+            continue
+
+        article = CELL_TAIL.sub('', ' '.join(child_text(element, 'Артикул').split()))
+        name = ' '.join(child_text(element, 'Наименование').split())
+        status = child_text(element, 'Статус')
+
+        group = ''
+        for node in element:
+            if tag(node) == 'Группы':
+                for ident in node:
+                    group = groups.get((ident.text or '').strip(), '')
+                    break
+
+        items.append({
+            'external_id': child_text(element, 'Ид').split('#')[0],
+            'article': article[:100],
+            'name': name[:500],
+            'description': child_text(element, 'Описание')[:20000],
+            'group': group,
+            'deleted': status.lower().startswith('удал') or 'НА УДАЛЕНИЕ' in name.upper(),
+        })
+
+    return items
+
+
+@app.route('/admin/1c/analyze', methods=['POST'])
+@require_admin
+def analyze_1c():
+    """Что в выгрузке есть, а на сайте нет"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл выгрузки не пришёл'}), 400
+
+    try:
+        items = parse_commerceml(request.files['file'].read())
+    except ET.ParseError as error:
+        return jsonify({'error': f'Это не похоже на выгрузку 1С: {error}'}), 400
+
+    if not items:
+        return jsonify({'error': 'В файле нет товаров. Нужен import*.xml, '
+                                 'а не offers*.xml'}), 400
+
+    # Без каталога сверять не с чем, и все товары покажутся новыми. Лучше
+    # честно отказаться, чем предложить завести три тысячи дублей.
+    if fetch_json('/products?limit=1') is None:
+        return jsonify({'error': 'Каталог не отвечает — сверить не с чем. '
+                                 'Проверьте, запущен ли сервер каталога и '
+                                 'поднят ли туннель.'}), 502
+
+    # Что уже на сайте — по мягкому ключу артикула, как сопоставляет их 1С
+    known = {loose(item.get('article')) for item in catalogue()}
+
+    seen = {}
+    ready, skipped = [], {'без артикула': 0, 'на удаление': 0, 'уже на сайте': 0,
+                          'повторы в файле': 0}
+
+    for item in items:
+        if not item['article']:
+            skipped['без артикула'] += 1
+            continue
+        if item['deleted']:
+            skipped['на удаление'] += 1
+            continue
+
+        key = loose(item['article'])
+        if key in known:
+            skipped['уже на сайте'] += 1
+            continue
+        if key in seen:
+            skipped['повторы в файле'] += 1
+            continue
+
+        seen[key] = True
+        ready.append({
+            'article': item['article'],
+            'name': item['name'],
+            'description': item['description'],
+            'group': item['group'],
+        })
+
+    return jsonify({
+        'total': len(items),
+        'ready': ready,
+        'skipped': skipped,
+    })
+
+
+@app.route('/admin/1c/create', methods=['POST'])
+@require_admin
+def create_from_1c():
+    """Заводит отмеченные товары в их каталоге.
+
+    Создание идёт через их же админский API, а не мимо него: там проверки
+    артикула, длины полей и защита от дублей. Логин и пароль берутся из
+    этого запроса и передаются дальше — своих паролей сервис не хранит.
+    """
+    data = request.get_json() or {}
+    items = data.get('items') or []
+    category_id = data.get('category_id')
+
+    if not items:
+        return jsonify({'error': 'Нечего заводить'}), 400
+    if len(items) > 500:
+        return jsonify({'error': 'За раз не больше 500 товаров'}), 400
+
+    admin_api = os.getenv('ADMIN_API', 'http://10.8.0.2:3001').rstrip('/')
+    auth = request.headers.get('Authorization', '')
+
+    created, failed = [], []
+    for item in items:
+        body = json.dumps({
+            'article': str(item.get('article') or '').strip(),
+            'name': str(item.get('name') or '').strip(),
+            'description': item.get('description') or '',
+            'category_id': category_id,
+            'is_active': bool(item.get('is_active', True)),
+        }).encode('utf-8')
+
+        call = urllib.request.Request(f'{admin_api}/products', data=body,
+                                      method='POST')
+        call.add_header('Content-Type', 'application/json')
+        if auth:
+            call.add_header('Authorization', auth)
+
+        try:
+            with urllib.request.urlopen(call, timeout=20) as answer:
+                created.append(json.loads(answer.read().decode('utf-8'))['article'])
+        except urllib.error.HTTPError as error:
+            detail = {}
+            try:
+                detail = json.loads(error.read().decode('utf-8'))
+            except Exception:
+                pass
+            failed.append({'article': item.get('article'),
+                           'error': detail.get('error') or f'ошибка {error.code}'})
+        except Exception as error:
+            failed.append({'article': item.get('article'), 'error': str(error)})
+
+    # Каталог изменился — разбор SEO и список для сверки перечитываем заново
+    CATALOG_CACHE['at'] = 0
+
+    return jsonify({'created': len(created), 'failed': failed})
 
 
 with app.app_context():

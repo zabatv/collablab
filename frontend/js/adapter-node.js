@@ -110,6 +110,11 @@ const NodeAPI = (() => {
          { method: 'POST', body: { query, results } }).catch(() => {});
   }
 
+  // Выгрузка 1С: что в ней есть сверх того, что уже на сайте
+  const create1c = (items, categoryId) =>
+    callSite('/admin/1c/create',
+             { method: 'POST', body: { items, category_id: categoryId } });
+
   const seoTraffic = (days = 30) => callSite(`/admin/seo/traffic?days=${days}`);
   const seoCatalog = () => callSite('/admin/seo/catalog');
 
@@ -693,7 +698,7 @@ const NodeAPI = (() => {
     categoryTree, categoriesFlat, category, products, product,
     brandMap, brandOf, brands, catalogue, looseKey,
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
-    trackView, trackSearch, seoTraffic, seoCatalog, siteBase,
+    trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

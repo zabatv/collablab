@@ -434,6 +434,24 @@ const AdminAPI = {
     apiCall(`/admin/import/progress/${encodeURIComponent(jobId)}`,
             { headers: authHeader() }),
 
+  // ----- выгрузка 1С -----
+
+  // Разбор файла выгрузки: что в нём есть, чего нет на сайте
+  analyze1c: (file, onProgress) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return ON_NODE
+      ? uploadWithProgress(`${NodeAPI.siteBase()}/admin/1c/analyze`,
+                           formData, onProgress)
+      : NodeAPI.missing('Разбора выгрузки 1С');
+  },
+
+  // Заводит отмеченные товары через их же админский API
+  create1c: (items, categoryId) =>
+    ON_NODE ? NodeAPI.create1c(items, categoryId)
+            : NodeAPI.missing('Заведения товаров из 1С'),
+
   seoCatalog: () =>
     ON_NODE ? NodeAPI.seoCatalog()
             : apiCall('/admin/seo/catalog', { headers: authHeader() }),

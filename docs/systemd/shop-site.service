@@ -18,8 +18,12 @@ After=network.target
 WorkingDirectory=/var/www/collablab/services/site
 Environment=ADMIN_USER=admin
 Environment=ADMIN_PASSWORD=ЗАМЕНИТЕ_ПАРОЛЬ
-# Куда ходить за товарами для разбора каталога: их API внутри туннеля
+# Куда ходить за товарами: их API внутри туннеля. CATALOG_API — чтение
+# для разбора каталога и сверки с выгрузкой 1С, ADMIN_API — заведение
+# товаров из вкладки «1С» (пароль при этом не хранится, он приходит из
+# запроса браузера и передаётся дальше).
 Environment=CATALOG_API=http://10.8.0.2:3000
+Environment=ADMIN_API=http://10.8.0.2:3001
 ExecStart=/var/www/collablab/.venv/bin/gunicorn --preload -w 2 -b 127.0.0.1:5001 app:app
 Restart=always
 User=www-data

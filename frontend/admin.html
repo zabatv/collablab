@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261009">
+  <link rel="stylesheet" href="css/style.css?v=20261010">
   <style>
     .admin-layout {
       display: grid;
@@ -1575,6 +1575,7 @@
       <nav style="position: relative; height: calc(100vh - 200px);">
         <div class="nav-item active" data-tab="products" onclick="switchTab('products')">Товары</div>
         <div class="nav-item" data-tab="categories" onclick="switchTab('categories')">Категории</div>
+        <div class="nav-item" data-tab="import1c" onclick="switchTab('import1c')">1С</div>
         <div class="nav-item" data-tab="banners" onclick="switchTab('banners')">Слайдер</div>
         <div class="nav-item" data-tab="brands" onclick="switchTab('brands')">Бренды</div>
         <div class="nav-item" data-tab="seo" onclick="switchTab('seo')">SEO</div>
@@ -1711,6 +1712,72 @@
         </p>
 
         <div id="brands-list" class="brand-list"></div>
+      </section>
+
+      <!-- Заведение товаров из выгрузки 1С -->
+      <section class="admin-section" id="import1c-section">
+        <div class="admin-header">
+          <h1>ТОВАРЫ ИЗ 1С</h1>
+        </div>
+
+        <p class="text-muted" style="margin-bottom: 20px; max-width: 78ch;">
+          1С выгружает весь ассортимент, а на сайте показывается только то,
+          что здесь заведено. Выберите файл <b>import0_1.xml</b> из папки
+          выгрузки — обычно это <span class="num">C:\1c-export\webdata</span> —
+          и отметьте, что добавить. Цену и остаток вводить не нужно: они
+          подтянутся из 1С при ближайшей синхронизации, по артикулу.
+        </p>
+
+        <div class="form-group" style="max-width: 560px;">
+          <label>Файл выгрузки</label>
+          <input type="file" id="import1c-file" accept=".xml">
+        </div>
+
+        <button class="btn btn-secondary" onclick="analyze1c()">РАЗОБРАТЬ ФАЙЛ</button>
+
+        <div id="import1c-summary" class="notice" hidden></div>
+
+        <div id="import1c-controls" hidden style="margin-top: 20px;">
+          <div class="form-group" style="max-width: 560px;">
+            <label>В какой раздел заводить</label>
+            <select id="import1c-category"></select>
+            <small class="form-hint">Один раздел на всю партию. Потом товар
+              можно перенести в другой, открыв его карточку.</small>
+          </div>
+
+          <div class="form-group" style="max-width: 560px;">
+            <label>Поиск по названию или артикулу</label>
+            <input type="text" id="import1c-search" autocomplete="off"
+                   placeholder="например SC или цилиндр">
+          </div>
+
+          <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+            <button class="btn btn-ghost" onclick="pick1c(true)">ОТМЕТИТЬ ВИДИМЫЕ</button>
+            <button class="btn btn-ghost" onclick="pick1c(false)">СНЯТЬ ОТМЕТКИ</button>
+            <button class="btn btn-primary" onclick="run1c()">ЗАВЕСТИ ОТМЕЧЕННЫЕ</button>
+          </div>
+
+          <div class="import-progress" id="import1c-progress" hidden>
+            <div class="import-progress-track">
+              <div class="import-progress-fill" id="import1c-progress-fill"></div>
+            </div>
+            <span class="import-progress-label" id="import1c-progress-label"></span>
+          </div>
+
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 44px;"></th>
+                  <th style="width: 180px;">АРТИКУЛ</th>
+                  <th>НАЗВАНИЕ</th>
+                  <th style="width: 200px;">ГРУППА В 1С</th>
+                </tr>
+              </thead>
+              <tbody id="import1c-rows"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- SEO Section -->
@@ -1954,10 +2021,10 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20261009"></script>
-  <script src="js/adapter-node.js?v=20261009"></script>
-  <script src="js/api.js?v=20261009"></script>
-  <script src="js/main.js?v=20261009"></script>
+  <script src="js/config.js?v=20261010"></script>
+  <script src="js/adapter-node.js?v=20261010"></script>
+  <script src="js/api.js?v=20261010"></script>
+  <script src="js/main.js?v=20261010"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -1982,7 +2049,12 @@
     // кнопки, которые всё равно ответят ошибкой, — врать интерфейсом:
     // такие места закрываются с объяснением, почему.
     function adaptToBackend() {
-      if (!ON_NODE) return;
+      // Вкладка «1С» имеет смысл только с их бэкендом: выгрузку читает
+      // наш сервис, а товары заводит их админский сервер
+      if (!ON_NODE) {
+        el('.nav-item[data-tab="import1c"]').hidden = true;
+        return;
+      }
 
       // Бренды, слайдер и SEO держит наш сервис, а не их бэкенд: эти
       // разделы остаются, если адрес сервиса задан в config.js
@@ -2046,6 +2118,168 @@
       closeProductModal();
       await editProduct(id);
       return true;
+    }
+
+    // ===== товары из выгрузки 1С =====
+
+    // Разобранный файл живёт в памяти вкладки: гонять шесть мегабайт
+    // туда-сюда на каждое нажатие незачем
+    let found1c = [];
+
+    async function analyze1c() {
+      const file = el('#import1c-file').files[0];
+      if (!file) {
+        showNotification('Сначала выберите файл выгрузки', 'error');
+        return;
+      }
+
+      const summary = el('#import1c-summary');
+      summary.hidden = false;
+      summary.textContent = 'Разбираю файл…';
+
+      try {
+        const result = await AdminAPI.analyze1c(file);
+        found1c = result.ready || [];
+
+        const skipped = Object.entries(result.skipped || {})
+          .filter(([, count]) => count)
+          .map(([reason, count]) => `${reason} — ${count}`)
+          .join(', ');
+
+        summary.innerHTML = `
+          В файле <b>${result.total}</b> позиций.
+          Можно завести: <b>${found1c.length}</b>.
+          ${skipped ? `Пропущено: ${escapeHtml(skipped)}.` : ''}`;
+
+        el('#import1c-controls').hidden = found1c.length === 0;
+        await fill1cCategories();
+        render1c();
+      } catch (error) {
+        summary.textContent = failureText(error);
+      }
+    }
+
+    async function fill1cCategories() {
+      const select = el('#import1c-category');
+      if (select.options.length) return;
+
+      const tree = await AdminAPI.getCategories();
+      select.innerHTML = '<option value="">— без раздела —</option>';
+      categoryOptions(tree).forEach(option => {
+        select.innerHTML +=
+          `<option value="${option.id}">${escapeHtml(option.name)}</option>`;
+      });
+    }
+
+    function visible1c() {
+      const needle = el('#import1c-search').value.trim().toLowerCase();
+      if (!needle) return found1c;
+
+      return found1c.filter(item =>
+        item.name.toLowerCase().includes(needle)
+        || item.article.toLowerCase().includes(needle));
+    }
+
+    function render1c() {
+      const rows = el('#import1c-rows');
+      const list = visible1c();
+
+      // Больше трёхсот строк разом браузер рисует заметно дольше, чем
+      // человек успевает их прочитать
+      const shown = list.slice(0, 300);
+
+      rows.innerHTML = shown.map(item => `
+        <tr>
+          <td><input type="checkbox" data-article="${escapeHtml(item.article)}"
+                     ${item.picked ? 'checked' : ''} onchange="mark1c(this)"></td>
+          <td><span class="num">${escapeHtml(item.article)}</span></td>
+          <td>${escapeHtml(item.name)}</td>
+          <td class="text-muted">${escapeHtml(item.group || '—')}</td>
+        </tr>`).join('');
+
+      if (list.length > shown.length) {
+        rows.innerHTML += `
+          <tr><td colspan="4" class="text-muted" style="padding: 14px;">
+            Показаны первые ${shown.length} из ${list.length}. Сузьте поиск,
+            чтобы увидеть остальные — отметки со скрытых строк не снимаются.
+          </td></tr>`;
+      }
+    }
+
+    function mark1c(input) {
+      const item = found1c.find(entry => entry.article === input.dataset.article);
+      if (item) item.picked = input.checked;
+    }
+
+    function pick1c(picked) {
+      const list = picked ? visible1c() : found1c;
+      list.forEach(item => { item.picked = picked; });
+      render1c();
+    }
+
+    el('#import1c-search').addEventListener('input', render1c);
+
+    async function run1c() {
+      const picked = found1c.filter(item => item.picked);
+      if (!picked.length) {
+        showNotification('Ни один товар не отмечен', 'error');
+        return;
+      }
+
+      const category = el('#import1c-category').value;
+      if (!confirm(`Завести ${picked.length} товаров?\n\nЦены и остатки ` +
+                   `подтянутся из 1С при ближайшей синхронизации.`)) {
+        return;
+      }
+
+      const progress = el('#import1c-progress');
+      const fill = el('#import1c-progress-fill');
+      const label = el('#import1c-progress-label');
+      progress.hidden = false;
+
+      // Партиями: три тысячи товаров одним запросом не отправишь, да и
+      // видеть, как дело движется, спокойнее
+      const STEP = 100;
+      let created = 0;
+      const failed = [];
+
+      try {
+        for (let from = 0; from < picked.length; from += STEP) {
+          const chunk = picked.slice(from, from + STEP);
+          const result = await AdminAPI.create1c(chunk, category ? Number(category) : null);
+
+          created += result.created || 0;
+          failed.push(...(result.failed || []));
+
+          const done = Math.min(from + STEP, picked.length);
+          fill.style.width = `${Math.round((done / picked.length) * 100)}%`;
+          label.textContent = `${done} из ${picked.length}`;
+        }
+
+        // Заведённые больше не новые: убираем их из списка
+        const gone = new Set(picked.map(item => item.article));
+        found1c = found1c.filter(item => !gone.has(item.article));
+        render1c();
+
+        showNotification(failed.length
+          ? `Заведено ${created}, не удалось ${failed.length}`
+          : `Заведено товаров: ${created}`, failed.length ? 'error' : 'success');
+
+        if (failed.length) {
+          el('#import1c-summary').innerHTML = `
+            Не удалось завести ${failed.length}:
+            <ul style="margin: 8px 0 0 18px;">
+              ${failed.slice(0, 20).map(item => `
+                <li><span class="num">${escapeHtml(item.article || '')}</span>
+                    — ${escapeHtml(item.error || '')}</li>`).join('')}
+            </ul>`;
+        }
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      } finally {
+        progress.hidden = true;
+        fill.style.width = '0%';
+      }
     }
 
     // Tab switching
