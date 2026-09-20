@@ -514,7 +514,7 @@ const AdminAPI = {
     formData.append('image', file);
 
     return uploadWithProgress(ON_NODE
-      ? `${NodeAPI.conf().brands}/admin/brands/${id}/logo`
+      ? `${NodeAPI.siteBase()}/admin/brands/${id}/logo`
       : `${API_BASE}/admin/brands/${id}/upload-logo`, formData, onProgress)
       .then(brand => (ON_NODE && NodeAPI.forgetBrands(), brand));
   },
