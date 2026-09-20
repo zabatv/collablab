@@ -8,7 +8,7 @@
   <title>Товар — ROBOT</title>
   <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261012">
+  <link rel="stylesheet" href="css/style.css?v=20261013">
 </head>
 <body>
   <!-- Header -->
@@ -59,14 +59,9 @@
     <div class="loading">Загрузка…</div>
   </main>
 
-  <!-- Related Products -->
-  <section class="container" style="padding-block: 32px 48px; border-top: 1px solid var(--line);">
-    <div class="section-head">
-      <h2>Похожие товары</h2>
-      <a class="category-section-link" id="related-all" href="catalog.html">Вся категория</a>
-    </div>
-    <div id="related-products" class="grid grid-4"></div>
-  </section>
+  <!-- Весь раздел таблицей: цена и остаток соседних исполнений сразу
+       под товаром, без возврата в каталог -->
+  <section class="container" id="product-line" style="padding-block: 8px 48px;"></section>
 
   <!-- Footer -->
   <footer>
@@ -115,12 +110,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261012"></script>
-  <script src="js/adapter-node.js?v=20261012"></script>
-  <script src="js/api.js?v=20261012"></script>
-  <script src="js/main.js?v=20261012"></script>
-  <script src="js/effects.js?v=20261012"></script>
-  <script src="js/consent.js?v=20261012"></script>
+  <script src="js/config.js?v=20261013"></script>
+  <script src="js/adapter-node.js?v=20261013"></script>
+  <script src="js/api.js?v=20261013"></script>
+  <script src="js/main.js?v=20261013"></script>
+  <script src="js/effects.js?v=20261013"></script>
+  <script src="js/consent.js?v=20261013"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -137,9 +132,8 @@
 
         currentProduct = await ProductAPI.getProduct(productId);
         renderProduct();
-        loadVariants(productId);
         loadCategoryPath();
-        loadRelatedProducts();
+        loadLine();
 
         // Counted for the admin statistics; failure here must not affect the
         // page. Their backend keeps no counters, so on it the count is kept
@@ -153,41 +147,6 @@
         console.error('Error loading product:', error);
         el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p>Возможно, позицию сняли с продажи.</p><a class="btn btn-secondary" href="catalog.html">Вернуться в каталог</a></div>';
       }
-    }
-
-    // A subcategory holds the same part in several sizes. They are separate
-    // products, so switching size is following a link — but the buyer should
-    // see the sizes without going back to the list first.
-    async function loadVariants(productId) {
-      let variants = [];
-      try {
-        variants = await ProductAPI.getVariants(productId);
-      } catch (error) {
-        // Without the list the page still sells the товар it is about
-        console.error('Error loading variants:', error);
-        return;
-      }
-
-      const host = el('#product-variants');
-      if (!host || variants.length < 2) return;
-
-      const current = variants.find(variant => variant.current);
-      host.innerHTML = `
-        <div class="variants">
-          <div class="variants-label">
-            Исполнения <span class="text-muted">(${variants.length})</span>
-          </div>
-          <div class="variants-row">
-            ${variants.map(variant => `
-              <a class="variant${variant.current ? ' variant-current' : ''}"
-                 href="product.html?id=${variant.id}"
-                 ${variant.current ? 'aria-current="true"' : ''}>
-                <span class="variant-name">${escapeHtml(variant.label)}</span>
-                <span class="variant-price num">${formatPrice(variant.price)}</span>
-              </a>`).join('')}
-          </div>
-          ${current ? '' : '<p class="text-muted variants-hint">Текущая позиция в списке не показана</p>'}
-        </div>`;
     }
 
     // The trail down the tree: Каталог / Фитинги / Угловые / этот товар
@@ -265,9 +224,6 @@
               </div>
             </div>
 
-            <!-- The same part in its other sizes, filled once they arrive -->
-            <div id="product-variants"></div>
-
             <div class="product-buy">
               <div class="product-price">
                 ${formatPrice(product.price)}
@@ -277,8 +233,7 @@
             </div>
 
             <div class="product-actions">
-              <button class="btn btn-accent btn-lg" onclick="callStore()">Запросить цену и срок</button>
-              <a class="btn btn-secondary btn-lg" href="tel:+79034901490">Позвонить</a>
+              <a class="btn btn-accent btn-lg" href="tel:+79034901490">Позвонить</a>
             </div>
 
             ${product.description ? `
@@ -433,51 +388,40 @@
       });
     }
 
-    async function loadRelatedProducts() {
+    /* Весь раздел таблицей. Монтажные стойки, фитинги, пневмотрубки —
+       это всегда линейка одного и того же в разных размерах, и выбирают
+       её по цене и остатку рядом, а не по фотографии: карточками тот же
+       список занимал экран и показывал четыре позиции из двадцати. */
+    async function loadLine() {
+      const host = el('#product-line');
+      const product = currentProduct;
+      if (!host || !product.category?.id) return;
+
       try {
-        const product = currentProduct;
-        if (!product.category?.id) return;
-
-        el('#related-all').href = `catalog.html?category=${product.category.id}`;
-
         const data = await ProductAPI.getProducts({
           category_id: product.category.id,
-          per_page: 6
+          sort: 'name',
+          per_page: 100,
         });
 
-        const grid = el('#related-products');
-        grid.innerHTML = data.products
-          .filter(p => p.id !== product.id)
-          .slice(0, 4)
-          .map(createProductCard)
-          .join('');
+        if (data.products.length < 2) return;
+
+        const link = `catalog.html?category=${product.category.id}`;
+        host.innerHTML = `
+          <div class="section-head">
+            <h2>${escapeHtml(product.category.name)}</h2>
+            <a class="category-section-link" href="${link}">Весь раздел</a>
+          </div>
+          ${productTable(data.products, product.id)}
+          ${data.total > data.products.length ? `
+            <p class="text-muted" style="margin-top: 12px;">
+              Показаны первые ${data.products.length} из ${data.total}.
+              <a href="${link}">Открыть раздел целиком</a>
+            </p>` : ''}`;
       } catch (error) {
-        console.error('Error loading related products:', error);
+        // Без списка страница всё равно продаёт товар, о котором она
+        console.error('Error loading the category line:', error);
       }
-    }
-
-    // The site has nowhere to send a request to, so the button opens a letter
-    // the buyer sends themselves, with the position already written into it.
-    // It used to say «Запрос отправлен» while sending nothing at all.
-    function callStore() {
-      const product = currentProduct;
-      if (!product) return;
-
-      const subject = `Запрос цены: ${product.sku}`;
-      const body = [
-        `Здравствуйте!`,
-        ``,
-        `Интересует позиция:`,
-        `${product.name}`,
-        `Артикул: ${product.sku}`,
-        `Цена на сайте: ${formatPrice(product.price)}`,
-        ``,
-        `Нужное количество: `,
-        `Как с вами связаться: `,
-      ].join('\n');
-
-      window.location.href =
-        `mailto:anzor07@bk.ru?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     }
 
     async function handleSearch() {

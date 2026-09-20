@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261012">
+  <link rel="stylesheet" href="css/style.css?v=20261013">
 </head>
 <body>
   <!-- Header -->
@@ -132,12 +132,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261012"></script>
-  <script src="js/adapter-node.js?v=20261012"></script>
-  <script src="js/api.js?v=20261012"></script>
-  <script src="js/main.js?v=20261012"></script>
-  <script src="js/effects.js?v=20261012"></script>
-  <script src="js/consent.js?v=20261012"></script>
+  <script src="js/config.js?v=20261013"></script>
+  <script src="js/adapter-node.js?v=20261013"></script>
+  <script src="js/api.js?v=20261013"></script>
+  <script src="js/main.js?v=20261013"></script>
+  <script src="js/effects.js?v=20261013"></script>
+  <script src="js/consent.js?v=20261013"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -160,7 +160,8 @@
         }
 
         clear(sections);
-        filled.forEach(section => renderSection(sections, section));
+        filled.forEach(section =>
+          renderSection(sections, section, sectionStartsOpen(section.id)));
       } catch (error) {
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
@@ -285,31 +286,124 @@
       slideTimer = null;
     }
 
-    // Раздел — заголовок и его подкатегории. Ничего не сворачивается:
-    // полоса со стрелкой убрана, каталог виден весь сразу.
-    function renderSection(container, category) {
+    // Сколько длится сворачивание. Должно совпадать с --unfold в стилях.
+    const FOLD_MS = 340;
+
+    /* ---------- что оставили свёрнутым ----------
+       Только идентификаторы разделов и только в этом браузере. Приватный
+       режим и запрет на данные сайта бросают исключение, а каталог должен
+       открыться в любом случае. */
+    const FOLD_KEY = 'folded-sections';   // что закрыли на большом экране
+    const OPEN_KEY = 'opened-sections';   // что открыли на телефоне
+
+    /* На большом экране разделы стоят открытыми: каталог сразу показывает,
+       что в нём есть, а полоса нужна, чтобы убрать лишнее. На телефоне
+       наоборот — одиннадцать открытых разделов превращают главную в ленту
+       на семнадцать экранов, и до нужного не долистать. */
+    const onPhone = () => window.matchMedia('(max-width: 640px)').matches;
+
+    function storedSet(key) {
+      try {
+        const stored = JSON.parse(localStorage.getItem(key) || '[]');
+        return new Set(Array.isArray(stored) ? stored : []);
+      } catch (error) {
+        return new Set();
+      }
+    }
+
+    function sectionStartsOpen(id) {
+      return onPhone() ? storedSet(OPEN_KEY).has(id) : !storedSet(FOLD_KEY).has(id);
+    }
+
+    function rememberFold(id, open) {
+      // На телефоне запоминается открытое, на большом экране — закрытое:
+      // помнить стоит то, что расходится с обычным видом страницы
+      const key = onPhone() ? OPEN_KEY : FOLD_KEY;
+      const listed = storedSet(key);
+
+      (onPhone() ? open : !open) ? listed.add(id) : listed.delete(id);
+
+      try {
+        localStorage.setItem(key, JSON.stringify([...listed]));
+      } catch (error) {
+        // Запоминание — удобство; потеря его ничего не меняет
+      }
+    }
+
+    /* Открывает или закрывает раздел, разгоняя высоту от той, что сейчас, к
+       той, что будет. Одним CSS это делается переходом строки грида между
+       1fr и 0fr, но только в браузерах последних лет — в старом раздел
+       просто мигнул бы. Измеренная высота анимируется везде. */
+    function foldSection(head, body, inner, open) {
+      body.dataset.open = String(open);
+      head.setAttribute('aria-expanded', String(open));
+
+      const from = body.getBoundingClientRect().height;
+      const to = open ? inner.scrollHeight : 0;
+
+      body.style.height = `${from}px`;
+      void body.offsetHeight;          // дать браузеру взять начальное значение
+      body.style.height = `${to}px`;
+
+      clearTimeout(body.foldTimer);
+      body.foldTimer = setTimeout(() => {
+        // Открытый раздел возвращается к auto: поздно приехавшая фотография
+        // или повёрнутый телефон не должны обрезаться по числу, измеренному
+        // до того и другого
+        body.style.height = open ? 'auto' : '0px';
+      }, FOLD_MS);
+    }
+
+    // Закрытая полоса ничего не говорит о том, что за ней, поэтому несёт
+    // первые несколько имён — этого хватает, чтобы решить, открывать ли
+    function sectionHint(category) {
+      const names = (category.children || []).map(child => child.name);
+      if (names.length === 0) return '';
+
+      const shown = names.slice(0, 3).join(' · ');
+      return names.length > 3 ? `${shown} и ещё ${names.length - 3}` : shown;
+    }
+
+    // Раздел — полоса, которая сворачивается. На компьютере она стоит
+    // открытой, на телефоне закрытой: там из неё получается оглавление,
+    // по которому видно весь каталог, не пролистывая его целиком.
+    function renderSection(container, category, open) {
       const section = document.createElement('section');
       section.className = 'section-block reveal';
 
-      const head = document.createElement('div');
-      head.className = 'section-head-plain';
+      const head = document.createElement('button');
+      head.type = 'button';
+      head.className = 'section-head-bar';
+      head.setAttribute('aria-expanded', String(open));
       head.innerHTML = `
-        <h3 class="section-title">
-          <a href="catalog.html?category=${category.id}">${escapeHtml(category.name)}</a>
-        </h3>
+        <span class="section-chevron" aria-hidden="true"></span>
+        <span class="section-title">${escapeHtml(category.name)}</span>
+        <span class="section-hint">${escapeHtml(sectionHint(category))}</span>
         <span class="section-count num">${category.total_count}</span>`;
 
       const body = document.createElement('div');
       body.className = 'section-body';
+      body.dataset.open = String(open);
+      // Состояние, с которым страница открылась, не анимируется
+      body.style.height = open ? 'auto' : '0px';
 
       const inner = document.createElement('div');
       inner.className = 'section-body-inner';
       body.appendChild(inner);
 
+      head.addEventListener('click', () => {
+        const nowOpen = body.dataset.open !== 'true';
+        // В разделе, закрытом с самого начала, ещё пусто, а высоту надо
+        // знать до того, как начнётся разворот
+        if (nowOpen) fillSection(inner, category);
+        foldSection(head, body, inner, nowOpen);
+        rememberFold(category.id, nowOpen);
+      });
+
       section.append(head, body);
       container.appendChild(section);
 
-      fillSection(inner, category);
+      if (open) fillSection(inner, category);
     }
 
     // Filled the first time the section is opened, not before

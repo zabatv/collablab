@@ -771,6 +771,10 @@ header {
   transition: box-shadow var(--settle) var(--ease-out);
 }
 
+.section-block:has(.section-body[data-open="true"]) {
+  box-shadow: var(--shadow-md);
+}
+
 /* ===== SLIDER =====
    News, an offer, a new product. It stands where the opening block was, so
    it gets that block's room — a little less of it, since a picture reads
@@ -993,36 +997,53 @@ header {
   transition-duration: 520ms;
 }
 
-.section-head-plain {
+.section-head-bar {
+  width: 100%;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-sm);
   padding: 14px var(--space-md);
   background: var(--ink);
   color: #fff;
+  font-size: var(--text-md);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  transition: background-color var(--quick) ease, transform var(--press) var(--ease-out);
+}
+
+/* Полоса поддаётся под пальцем: касание получает ответ раньше, чем
+   разворот успевает начаться */
+.section-head-bar:active {
+  transform: scale(0.994);
+}
+
+/* Волосок акцента под полосой, рисуется только у открытого раздела */
+.section-head-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--unfold) var(--ease-out);
+}
+
+.section-head-bar[aria-expanded="true"]::after {
+  transform: scaleX(1);
 }
 
 .section-title {
   flex: none;
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: 650;
-  letter-spacing: -0.01em;
 }
 
-.section-title a {
-  color: inherit;
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .section-title a:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-}
-
-/* Названия подкатегорий одной строкой: читается на бегу, а когда места
-   не хватает — уступает его первым */
+/* Имена за закрытой полосой. Их читают на бегу, поэтому строка забирает
+   свободное место и первой же его отдаёт, когда полосе становится тесно. */
 .section-hint {
   flex: 1;
   min-width: 0;
@@ -1032,6 +1053,15 @@ header {
   font-size: var(--text-xs);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity var(--quick) ease, transform var(--unfold) var(--ease-out);
+}
+
+/* Открытая полоса держит под собой весь раздел, пересказ ей не нужен */
+.section-head-bar[aria-expanded="false"] .section-hint {
+  opacity: 1;
+  transform: none;
 }
 
 .section-count {
@@ -1046,8 +1076,42 @@ header {
   color: rgba(255, 255, 255, 0.85);
 }
 
+/* Смотрит вправо у закрытого раздела и вниз у открытого — единственное,
+   чем полоса показывает своё состояние */
+.section-chevron {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  transition: background-color var(--quick) ease, transform var(--unfold) var(--ease-out);
+}
+
+.section-chevron::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateX(-2px) rotate(-45deg);
+  transition: transform var(--unfold) var(--ease-out);
+}
+
+.section-head-bar[aria-expanded="true"] .section-chevron::before {
+  transform: translateY(-2px) rotate(45deg);
+}
+
+/* Сама складка. Высота ставится из JavaScript в пикселях и оттуда же
+   разгоняется — тот же эффект, что переход строки грида между 1fr и 0fr,
+   но без браузера, достаточно нового, чтобы её интерполировать. */
 .section-body {
+  overflow: hidden;
   background: var(--surface-sunken);
+  transition: height var(--unfold) var(--ease-out);
 }
 
 .section-pad {
@@ -1106,9 +1170,13 @@ header {
   transition-delay: calc(var(--reveal-delay, 0ms) + var(--i, 0) * 28ms);
 }
 
-.section-block.is-revealed .section-body .tile {
+.section-block.is-revealed .section-body[data-open="true"] .tile {
   opacity: 1;
   transform: translateY(0);
+}
+
+.section-body[data-open="false"] .tile {
+  transition-delay: 0s;
 }
 
 /* The same entrance on the catalogue page, where the tiles are drawn once
@@ -1321,6 +1389,15 @@ header {
 
 .ptable-name a:hover {
   color: var(--accent);
+}
+
+/* Строка того товара, на странице которого стоит таблица */
+.ptable tbody tr.ptable-here {
+  background: var(--surface-sunken);
+}
+
+.ptable-here .ptable-name {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* Артикул под названием: искать по нему приходят чаще, чем по имени */
@@ -2420,6 +2497,14 @@ footer {
     border-bottom-color: var(--accent);
   }
 
+  .section-head-bar:hover {
+    background: #22262d;
+  }
+
+  .section-head-bar:hover .section-chevron {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
   .search-bar input:hover {
     border-color: var(--ink-muted);
   }
@@ -2666,8 +2751,15 @@ footer {
     padding: var(--space-sm);
   }
 
-  .section-head-plain {
+  .section-head-bar {
     padding: 12px var(--space-sm);
+    font-size: var(--text-base);
+  }
+
+  /* Свёрнутая полоса держит имя и счётчик, названию нужно всё место */
+  .section-title {
+    flex: 1;
+    min-width: 0;
   }
 
   /* На узком экране подзаголовок с перечислением подкатегорий только мешает */
@@ -2745,8 +2837,10 @@ footer {
     transform: none;
   }
 
-  /* Без анимации плитки не должны остаться невидимыми */
-  .section-body .tile {
+  /* Складка всё равно происходит, просто мгновенно. Плитки открытого
+     раздела не должны остаться невидимыми без перехода, который их
+     показывал. */
+  .section-body[data-open="true"] .tile {
     opacity: 1;
     transform: none;
   }

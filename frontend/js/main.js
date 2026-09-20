@@ -101,17 +101,23 @@ function createProductCard(product) {
 /* Список таблицей: наименование из 1С, остаток и цена. Так выбирают, когда
    уже знают, что нужно, и сравнивают десяток похожих позиций по числам, а
    не по фотографии. Кнопки «Купить» нет: заказывают звонком. */
-function productTable(products) {
+function productTable(products, currentId = null) {
   const rows = products.map(product => {
     const stock = stockLabel(product);
     // Ноль в столбце «Кол-во» читается как «кончилось», а деталь возят
     // под заказ — так и написано
     const quantity = product.in_stock ? `${product.stock} шт.` : 'под заказ';
 
+    // Тот самый товар, на странице которого стоит таблица: ссылка на себя
+    // сбивает с толку, поэтому строка просто отмечена
+    const here = product.id === currentId;
+
     return `
-      <tr>
+      <tr${here ? ' class="ptable-here" aria-current="true"' : ''}>
         <td class="ptable-name">
-          <a href="product.html?id=${product.id}">${escapeHtml(product.name)}</a>
+          ${here
+            ? `<span>${escapeHtml(product.name)}</span>`
+            : `<a href="product.html?id=${product.id}">${escapeHtml(product.name)}</a>`}
           ${product.sku ? `<span class="ptable-sku">${escapeHtml(product.sku)}</span>` : ''}
         </td>
         <td class="ptable-stock num">
