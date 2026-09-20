@@ -8,7 +8,7 @@
   <title>Товар — ROBOT</title>
   <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261013">
+  <link rel="stylesheet" href="css/style.css?v=20261014">
 </head>
 <body>
   <!-- Header -->
@@ -59,10 +59,6 @@
     <div class="loading">Загрузка…</div>
   </main>
 
-  <!-- Весь раздел таблицей: цена и остаток соседних исполнений сразу
-       под товаром, без возврата в каталог -->
-  <section class="container" id="product-line" style="padding-block: 8px 48px;"></section>
-
   <!-- Footer -->
   <footer>
     <div class="container">
@@ -110,12 +106,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261013"></script>
-  <script src="js/adapter-node.js?v=20261013"></script>
-  <script src="js/api.js?v=20261013"></script>
-  <script src="js/main.js?v=20261013"></script>
-  <script src="js/effects.js?v=20261013"></script>
-  <script src="js/consent.js?v=20261013"></script>
+  <script src="js/config.js?v=20261014"></script>
+  <script src="js/adapter-node.js?v=20261014"></script>
+  <script src="js/api.js?v=20261014"></script>
+  <script src="js/main.js?v=20261014"></script>
+  <script src="js/effects.js?v=20261014"></script>
+  <script src="js/consent.js?v=20261014"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -239,6 +235,10 @@
             ${product.description ? `
               <p class="product-description">${escapeHtml(product.description)}</p>
             ` : ''}
+
+            <!-- Весь раздел таблицей: цена и остаток соседних исполнений
+                 стоят рядом с товаром, а не через экран от него -->
+            <div id="product-line"></div>
           </div>
         </div>
       `;
@@ -408,8 +408,8 @@
 
         const link = `catalog.html?category=${product.category.id}`;
         host.innerHTML = `
-          <div class="section-head">
-            <h2>${escapeHtml(product.category.name)}</h2>
+          <div class="line-head">
+            <h3>${escapeHtml(product.category.name)}</h3>
             <a class="category-section-link" href="${link}">Весь раздел</a>
           </div>
           ${productTable(data.products, product.id)}

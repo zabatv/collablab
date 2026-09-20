@@ -1462,6 +1462,77 @@ td.ptable-price {
   }
 }
 
+/* ---------- раздел таблицей на странице товара ---------- */
+
+/* Таблица стоит в правой колонке, рядом с кнопкой, поэтому меряет себя,
+   а не окно: на широком экране колонка держит три столбца, на узком —
+   те же строки, что на телефоне. */
+#product-line {
+  container: product-line / inline-size;
+  margin-top: var(--space-xl);
+}
+
+.line-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-xs);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line);
+}
+
+.line-head h3 {
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+#product-line .ptable {
+  font-size: var(--text-xs);
+}
+
+#product-line .ptable td {
+  padding: 10px 8px;
+}
+
+@container product-line (max-width: 560px) {
+  .ptable thead {
+    display: none;
+  }
+
+  .ptable,
+  .ptable tbody,
+  .ptable tr {
+    display: block;
+  }
+
+  .ptable tr {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .ptable td {
+    display: inline-block;
+    padding: 0;
+    border: 0;
+  }
+
+  .ptable-name {
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  td.ptable-stock,
+  td.ptable-price {
+    text-align: left;
+  }
+
+  td.ptable-price {
+    margin-left: 14px;
+  }
+}
+
 /* On a phone the filters fold away instead of squeezing the grid off screen */
 .filters-toggle {
   display: none;
