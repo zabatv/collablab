@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261015">
+  <link rel="stylesheet" href="css/style.css?v=20261016">
   <style>
     .admin-layout {
       display: grid;
@@ -1599,6 +1599,9 @@
           </div>
         </div>
 
+        <!-- Одной строкой: когда каталог последний раз менялся -->
+        <p class="sync-line text-muted" id="sync-line" hidden></p>
+
         <!-- How far the import has got: the upload, then the rows -->
         <div class="import-progress" id="import-progress" hidden>
           <div class="import-progress-track">
@@ -1718,6 +1721,13 @@
       <section class="admin-section" id="import1c-section">
         <div class="admin-header">
           <h1>ТОВАРЫ ИЗ 1С</h1>
+          <button class="btn btn-ghost" onclick="loadSyncStatus(true, true)">ОБНОВИТЬ</button>
+        </div>
+
+        <!-- Когда каталог последний раз менялся и сколько позиций 1С узнала -->
+        <div class="sync-box" id="sync-box">
+          <div class="sync-main" id="sync-main">Смотрю, когда приходило из 1С…</div>
+          <div class="sync-note text-muted" id="sync-note"></div>
         </div>
 
         <p class="text-muted" style="margin-bottom: 20px; max-width: 78ch;">
@@ -2044,10 +2054,10 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20261015"></script>
-  <script src="js/adapter-node.js?v=20261015"></script>
-  <script src="js/api.js?v=20261015"></script>
-  <script src="js/main.js?v=20261015"></script>
+  <script src="js/config.js?v=20261016"></script>
+  <script src="js/adapter-node.js?v=20261016"></script>
+  <script src="js/api.js?v=20261016"></script>
+  <script src="js/main.js?v=20261016"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -2063,6 +2073,7 @@
       loadProducts();
       loadCategoriesForSelect();
       loadBrandsForSelect();
+      loadSyncStatus();
     });
 
     // ===== подстройка под бэкенд =====
@@ -2330,6 +2341,103 @@
       if (tab === 'brands') loadBrands();
       if (tab === 'banners') loadBanners();
       if (tab === 'seo') loadSeo();
+      if (tab === 'import1c') loadSyncStatus(false, true);
+    }
+
+    /* ===== когда последний раз приходило из 1С =====
+
+       Их бэкенд не сообщает, когда отработала синхронизация: эндпоинта на
+       это нет. Зато 1С правит цену и остаток, а вместе с ними меняется
+       updated_at товара, — значит, самое свежее время в каталоге и есть
+       время последнего изменения. Оговорка, которую здесь же и пишем:
+       правка из админки меняет то же поле. */
+
+    function agoText(date) {
+      const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+      if (minutes < 1) return 'только что';
+      if (minutes < 60) return `${minutes} ${plural(minutes, 'минуту', 'минуты', 'минут')} назад`;
+
+      const hours = Math.round(minutes / 60);
+      if (hours < 24) return `${hours} ${plural(hours, 'час', 'часа', 'часов')} назад`;
+
+      const days = Math.round(hours / 24);
+      return `${days} ${plural(days, 'день', 'дня', 'дней')} назад`;
+    }
+
+    function plural(count, one, few, many) {
+      const tens = count % 100;
+      if (tens > 10 && tens < 20) return many;
+      const ones = count % 10;
+      if (ones === 1) return one;
+      if (ones >= 2 && ones <= 4) return few;
+      return many;
+    }
+
+    const whenText = (date) => new Intl.DateTimeFormat('ru-RU', {
+      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+    }).format(date);
+
+    // Время читается одним запросом и показывается сразу. Пересчёт
+    // связанных с 1С позиций перебирает весь каталог, поэтому делается
+    // только на вкладке «1С», где за этим и приходят.
+    let syncLoaded = false;
+    let linkedLoaded = false;
+
+    async function loadSyncStatus(force = false, deep = false) {
+      if (!ON_NODE) return;
+      if (force) { syncLoaded = false; linkedLoaded = false; }
+
+      const main = el('#sync-main');
+      const note = el('#sync-note');
+      const line = el('#sync-line');
+
+      if (!syncLoaded) {
+        syncLoaded = true;
+        if (main) main.textContent = 'Смотрю, когда приходило из 1С…';
+
+        try {
+          const change = await AdminAPI.getLastChange();
+
+          if (!change) {
+            if (main) main.textContent = 'В каталоге пока нет товаров.';
+            return;
+          }
+
+          const at = new Date(change.at);
+          const said = `Последнее изменение в каталоге: ${whenText(at)} — ${agoText(at)}`;
+
+          if (line) { line.textContent = said; line.hidden = false; }
+          if (main) main.textContent = said;
+          if (note) {
+            note.textContent =
+              `Это ${change.article} — ${change.name}. ` +
+              'Время берётся из самих товаров: 1С обновляет цены и остатки ' +
+              'каждые 20 минут, но время меняется, только когда что-то ' +
+              'действительно изменилось. Правка из админки считается так же.';
+          }
+        } catch (error) {
+          syncLoaded = false;
+          if (main) main.textContent = 'Не удалось спросить каталог: ' + failureText(error);
+          return;
+        }
+      }
+
+      // Сколько позиций 1С узнала по артикулу — это и есть здоровье обмена
+      if (!deep || linkedLoaded || !note) return;
+      linkedLoaded = true;
+
+      try {
+        const linked = await AdminAPI.get1cLinked();
+        if (!linked) return;
+
+        note.textContent += ` 1С узнала по артикулу ${linked.linked} ` +
+          `${plural(linked.linked, 'позицию', 'позиции', 'позиций')} из ${linked.total}` +
+          (linked.linked ? '.' : ' — цены и остатки пока не приходят ни на одну.');
+      } catch (error) {
+        linkedLoaded = false;
+        // Главное уже показано; счётчик связанных не критичен
+        console.error('Не удалось пересчитать связанные с 1С позиции:', error);
+      }
     }
 
     // ===== SEO =====

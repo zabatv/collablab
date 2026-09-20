@@ -786,6 +786,44 @@ const NodeAPI = (() => {
     return roots;
   }
 
+  /* ---------- когда каталог последний раз менялся ---------- */
+
+  /* Эндпоинта «когда отработала синхронизация» у них нет. Единственный
+     честный след — сами товары: 1С правит цену и остаток, и вместе с ними
+     меняется updated_at. Самое свежее время в каталоге и есть время
+     последнего изменения — с оговоркой, что руками из админки товар
+     правят тем же полем. */
+  async function lastChange() {
+    const data = await readAdmin('/products?limit=1&sort=-updated');
+    const item = (data.items || [])[0];
+    if (!item) return null;
+
+    return {
+      at: item.updated_at,
+      article: item.article,
+      name: item.name,
+      linked: Boolean(item.is_linked_to_1c),
+    };
+  }
+
+  /* Сколько позиций 1С узнала по артикулу. Это и есть здоровье обмена:
+     связанным она возит цену и остаток, остальные стоят как заведены. */
+  async function linkedTo1c() {
+    const first = await readAdmin('/products?limit=100&page=1');
+    const items = [...(first.items || [])];
+
+    const rest = [];
+    for (let page = 2; page <= Math.min(first.pages || 1, 40); page++) {
+      rest.push(readAdmin(`/products?limit=100&page=${page}`));
+    }
+    (await Promise.all(rest)).forEach(data => items.push(...(data.items || [])));
+
+    return {
+      total: items.length,
+      linked: items.filter(item => item.is_linked_to_1c).length,
+    };
+  }
+
   async function adminProducts(page = 1, perPage = 20) {
     const data = await readAdmin(`/products?page=${page}&limit=${perPage}`);
     const { products: items, total, pages } = adaptList(data);
@@ -860,6 +898,7 @@ const NodeAPI = (() => {
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
     categoryTexts, saveCategoryText, productSpecs, saveProductSpecs,
+    lastChange, linkedTo1c,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

@@ -1462,6 +1462,34 @@ td.ptable-price {
   }
 }
 
+/* ---------- когда каталог последний раз менялся ---------- */
+
+.sync-box {
+  margin-bottom: 20px;
+  padding: 14px var(--space-md);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  max-width: 78ch;
+}
+
+.sync-main {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.sync-note {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+  line-height: 1.55;
+}
+
+.sync-line {
+  margin-bottom: 16px;
+  font-size: var(--text-sm);
+}
+
 /* ---------- раздел таблицей на странице товара ---------- */
 
 /* Таблица стоит в правой колонке, рядом с кнопкой, поэтому меряет себя,
