@@ -271,3 +271,15 @@ class SearchQuery(db.Model):
     query = db.Column(db.String(255), nullable=False, index=True)
     results_count = db.Column(db.Integer, default=0)
     searched_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+class AdminSession(db.Model):
+    """Вход в админку хранится в базе, а не в памяти процесса.
+
+    Рабочих процессов у сервера несколько, и память у каждого своя: вошедший
+    через один процесс получал бы 401 от следующего запроса, попавшего в
+    другой. В базе лежит только хеш токена — по нему вход не подделать."""
+
+    __tablename__ = 'admin_sessions'
+
+    token_hash = db.Column(db.String(64), primary_key=True)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)

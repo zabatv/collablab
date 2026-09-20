@@ -1,9 +1,22 @@
-// API Helper Functions
-// Opened from a developer's own machine the backend is next door on port 5000;
-// everywhere else it is the server the site is published on
-const API_BASE = ['localhost', '127.0.0.1'].includes(window.location.hostname)
-  ? `${window.location.protocol}//${window.location.hostname}:5000/api`
-  : 'http://45.143.93.41:5000/api';
+// Где наш API.
+//
+// На боевом сайте — тот же домен, что и страница: nginx отдаёт /api тому же
+// Flask. Иначе никак: страница по https не может ходить на http-адрес, браузер
+// такие запросы блокирует, а сертификат на голый IP с портом не выпишешь.
+//
+// На машине разработчика backend стоит рядом, на порту 5000.
+// js/config.js может задать адрес вручную — apiBase.
+const API_BASE = (() => {
+  const configured = (window.SHOP_CONFIG || {}).apiBase;
+  if (configured) return configured.replace(/\/+$/, '');
+
+  const local = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+  if (local && window.location.port !== '5000') {
+    return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+  }
+
+  return `${window.location.origin}/api`;
+})();
 
 // Which backend serves the site. js/config.js holds the switch; the pages
 // below never ask, they call ProductAPI and AdminAPI as they always did.

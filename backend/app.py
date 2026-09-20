@@ -3,11 +3,12 @@ from flask_cors import CORS
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from models import (db, Product, Category, Brand, ProductImage, ProductVideo,
-                    Specification, ProductView, SearchQuery, Banner)
+                    Specification, ProductView, SearchQuery, Banner, AdminSession)
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import re
+import hashlib
 import secrets
 from datetime import datetime, timedelta
 from functools import wraps
@@ -64,36 +65,47 @@ SESSION_LIFETIME = timedelta(hours=12)
 LOGIN_MAX_ATTEMPTS = 5
 LOGIN_LOCKOUT = timedelta(minutes=15)
 
-# Sessions live in memory: a restart signs everyone out, which is acceptable
-# here and avoids persisting anything that grants access
-active_sessions = {}
+# Sessions live in the database, so every worker process sees the same ones.
+# Only a hash of the token is stored: the database never holds anything that
+# would let someone in by itself.
 failed_logins = {}
+
+def token_fingerprint(token):
+    return hashlib.sha256(token.encode('utf-8')).hexdigest()
 
 def issue_session():
     token = secrets.token_urlsafe(32)
-    active_sessions[token] = datetime.utcnow() + SESSION_LIFETIME
+    db.session.add(AdminSession(token_hash=token_fingerprint(token),
+                                expires_at=datetime.utcnow() + SESSION_LIFETIME))
+
+    # Expired rows are swept here, where somebody is already waiting on a write
+    AdminSession.query.filter(AdminSession.expires_at < datetime.utcnow()).delete()
+    db.session.commit()
     return token
 
 def constant_time_equal(left, right):
     """compare_digest rejects strings holding non-ASCII, so compare their bytes"""
     return secrets.compare_digest(left.encode('utf-8'), right.encode('utf-8'))
 
+def forget_session(token):
+    if not token:
+        return
+    AdminSession.query.filter_by(token_hash=token_fingerprint(token)).delete()
+    db.session.commit()
+
 def session_is_valid(token):
     if not token:
         return False
 
-    # Compare against every known token in constant time, so a wrong token
-    # cannot be narrowed down by how long the answer takes
-    match = None
-    for known in list(active_sessions):
-        if constant_time_equal(known, token):
-            match = known
-
-    if match is None:
+    # Looked up by the hash: the token itself is 32 random bytes, so guessing
+    # it is out of reach, and the query gives nothing away about the others
+    found = db.session.get(AdminSession, token_fingerprint(token))
+    if found is None:
         return False
 
-    if datetime.utcnow() > active_sessions[match]:
-        active_sessions.pop(match, None)
+    if datetime.utcnow() > found.expires_at:
+        db.session.delete(found)
+        db.session.commit()
         return False
 
     return True
@@ -149,7 +161,7 @@ def login():
 def logout():
     """Revoke the current session token"""
     header = request.headers.get('Authorization', '')
-    active_sessions.pop(header[7:], None)
+    forget_session(header[7:])
     return '', 204
 
 @app.route('/api/auth/check', methods=['GET'])
@@ -2213,11 +2225,16 @@ def ensure_schema():
             connection.exec_driver_sql('PRAGMA foreign_keys=ON')
             print('Схема: имя категории больше не обязано быть уникальным на весь каталог')
 
+# Under gunicorn nothing runs the block below, so the schema is brought up to
+# date here, at import. Start gunicorn with --preload: the module is then
+# imported once in the parent, and workers do not race each other over ALTER
+# TABLE. Both calls are idempotent.
+with app.app_context():
+    db.create_all()
+    ensure_schema()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        ensure_schema()
-        print("Database initialized!")
+    print("Database initialized!")
 
     # Debug must be opted into: the Werkzeug debugger hands an interactive Python
     # console to anyone who can reach the port and trigger an error
