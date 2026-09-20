@@ -80,3 +80,4 @@ tmp/
 # Generated per deployment with the real domain
 frontend/sitemap.xml
 frontend/robots.txt
+.claude/settings.local.json

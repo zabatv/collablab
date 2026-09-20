@@ -62,12 +62,15 @@ const NodeAPI = (() => {
 
   /* ---------- товар ---------- */
 
-  // Ссылки на медиа относительные, базовый адрес подставляет тот, кто
-  // спрашивал: у публичного сервера и админки он разный
-  const withBase = (base, url) =>
-    url && url.startsWith('/') ? `${base}${url}` : url;
+  // Ссылки на медиа относительные. Базовым всегда берётся публичный
+  // сервер: он отдаёт файлы без пароля, а к <img> браузер заголовок
+  // авторизации не приложит — из-под админки фотографии были бы битыми.
+  const mediaBase = () => conf().public || conf().admin || '';
 
-  function adaptProduct(item, base) {
+  const withBase = (url) =>
+    url && url.startsWith('/') ? `${mediaBase()}${url}` : url;
+
+  function adaptProduct(item) {
     if (!item) return null;
 
     const media = item.media || [];
@@ -85,16 +88,16 @@ const NodeAPI = (() => {
       old_price: null,
       stock: item.quantity ?? 0,
       in_stock: item.in_stock ?? (item.quantity > 0),
-      image: withBase(base, item.photo || photos[0]?.url || null),
+      image: withBase(item.photo || photos[0]?.url || null),
       discount: null,
 
       description: item.description,
       images: photos.map(entry => ({
-        id: entry.id, url: withBase(base, entry.url),
+        id: entry.id, url: withBase(entry.url),
         alt: item.name, order: entry.sort_order,
       })),
       videos: videos.map(entry => ({
-        id: entry.id, url: withBase(base, entry.url), title: '',
+        id: entry.id, url: withBase(entry.url), title: '',
       })),
       // Характеристик у них нет: только описание текстом
       specifications: [],
@@ -107,9 +110,9 @@ const NodeAPI = (() => {
     };
   }
 
-  function adaptList(data, base) {
+  function adaptList(data) {
     return {
-      products: (data.items || []).map(item => adaptProduct(item, base)),
+      products: (data.items || []).map(adaptProduct),
       total: data.total || 0,
       pages: data.pages || 1,
       current_page: data.page || 1,
@@ -216,14 +219,121 @@ const NodeAPI = (() => {
     return buildTree(data.items || []);
   }
 
+  // Ветка нужна дереву, но не тому, кто спрашивал про одну категорию
+  const strip = ({ children, ...rest }) => rest;
+
+  async function categoriesFlat() {
+    const flat = [];
+    const walk = (nodes) => nodes.forEach(node => {
+      flat.push(strip(node));
+      walk(node.children);
+    });
+    walk(await categoryTree());
+    return flat;
+  }
+
+  // Наш формат: сама категория, путь до корня и прямые дети
+  async function category(id) {
+    const tree = await categoryTree();
+    const wanted = Number(id);
+    const node = findInTree(tree, wanted);
+    if (!node) throw new Error('Категория не найдена');
+
+    return {
+      ...strip(node),
+      path: (pathTo(tree, wanted) || []).map(strip),
+      children: node.children.map(strip),
+    };
+  }
+
+  /* ---------- витрина ---------- */
+
+  async function products(filters = {}) {
+    return adaptList(await readPublic(`/products?${listQuery(filters)}`));
+  }
+
+  const product = async (id) => adaptProduct(await readPublic(`/products/${id}`));
+
+  /* ---------- админка ---------- */
+
+  // Дерево для админки берётся у админского сервера: там видны и скрытые
+  // товары, и открыта она бывает, когда публичный сервер ещё не поднят
+  async function adminCategoryTree() {
+    const data = await readAdmin('/categories');
+    return buildTree(data.items || []);
+  }
+
+  async function adminProducts(page = 1, perPage = 20) {
+    const data = await readAdmin(`/products?page=${page}&limit=${perPage}`);
+    const { products: items, total, pages } = adaptList(data);
+    return { products: items, total, pages };
+  }
+
+  // «Цена по запросу» это null, а не ноль: ноль они не примут
+  function asPrice(value) {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0
+      ? Math.round(number * 100) / 100
+      : null;
+  }
+
+  const asCategory = (value) =>
+    value === '' || value === undefined || value === null ? null : Number(value);
+
+  async function createProduct(data) {
+    const created = await readAdmin('/products', {
+      method: 'POST',
+      body: {
+        article: String(data.sku || '').trim(),
+        name: String(data.name || '').trim(),
+        description: data.description || '',
+        category_id: asCategory(data.category_id),
+        price: asPrice(data.price),
+        is_active: data.is_active !== false,
+      },
+    });
+    return adaptProduct(created);
+  }
+
+  // Цену, остаток и артикул они менять не дают — это поля 1С. Всё лишнее
+  // здесь же и отсекается, иначе сервер ответит 400 на целую карточку.
+  const PATCHABLE = ['name', 'description', 'is_active', 'manually_edited'];
+
+  async function updateProduct(id, data) {
+    const body = {};
+    PATCHABLE.forEach(field => {
+      if (data[field] !== undefined) body[field] = data[field];
+    });
+    if (data.category_id !== undefined) body.category_id = asCategory(data.category_id);
+
+    const saved = await readAdmin(`/products/${id}`, { method: 'PATCH', body });
+    return adaptProduct(saved);
+  }
+
+  const deleteMedia = (productId, mediaId) =>
+    readAdmin(`/products/${productId}/media/${mediaId}`, { method: 'DELETE' });
+
+  // Пароль они не проверяют отдельным эндпоинтом: единственный способ
+  // узнать, подходит ли он — сходить за данными и посмотреть на ответ
+  async function checkCredentials() {
+    await readAdmin('/products?limit=1');
+    return true;
+  }
+
   /* ---------- то, чего у них нет ---------- */
 
   // Пустой ответ, а не ошибка: страница просто не покажет этот блок
   const nothing = () => Promise.resolve([]);
 
+  // А вот запись молча терять нельзя: пусть скажет, почему не вышло
+  const missing = (what) => Promise.reject(new Error(
+    `${what} нет в API этого бэкенда. Раздел заработает, когда на той стороне появится эндпоинт.`));
+
   return {
-    basicHeader, rememberCredentials, forgetCredentials,
+    basicHeader, rememberCredentials, forgetCredentials, checkCredentials,
     adaptProduct, adaptList, listQuery, buildTree, findInTree, pathTo,
-    categoryTree, readPublic, readAdmin, call, conf, nothing, withBase,
+    categoryTree, categoriesFlat, category, products, product,
+    adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,
+    readPublic, readAdmin, call, conf, nothing, missing, withBase,
   };
 })();

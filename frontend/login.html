@@ -253,9 +253,11 @@
 
   </div>
 
-  <script src="js/api.js?v=20261006"></script>
-  <script src="js/main.js?v=20261006"></script>
-  <script src="js/effects.js?v=20261006"></script>
+  <script src="js/config.js?v=20261007"></script>
+  <script src="js/adapter-node.js?v=20261007"></script>
+  <script src="js/api.js?v=20261007"></script>
+  <script src="js/main.js?v=20261007"></script>
+  <script src="js/effects.js?v=20261007"></script>
   <script>
     const form = el('#login-form');
     const errorBox = el('#login-error');
@@ -275,8 +277,10 @@
     async function loadFigures() {
       try {
         const categories = await ProductAPI.getCategories();
-        const products = categories.reduce((sum, category) => sum + category.product_count, 0);
-        const filled = categories.filter(category => category.product_count > 0).length;
+        // Товары лежат в подкатегориях, поэтому считается вся ветка
+        const count = (category) => category.total_count ?? category.product_count;
+        const products = categories.reduce((sum, category) => sum + count(category), 0);
+        const filled = categories.filter(category => count(category) > 0).length;
         if (!products) return;
 
         const host = el('#login-figures');

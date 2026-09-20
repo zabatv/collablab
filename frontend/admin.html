@@ -798,6 +798,31 @@
       font-size: 14px;
     }
 
+    /* Подпись под полем: почему оно такое, а не просто серое */
+    .form-hint {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #777;
+    }
+
+    .form-group-locked input {
+      background: #f4f4f4;
+      color: #666;
+      cursor: not-allowed;
+    }
+
+    .notice {
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      border-left: 3px solid #999;
+      background: #f6f6f6;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #555;
+    }
+
     .admin-form input,
     .admin-form textarea,
     .admin-form select {
@@ -1548,11 +1573,11 @@
       </div>
 
       <nav style="position: relative; height: calc(100vh - 200px);">
-        <div class="nav-item active" onclick="switchTab('products')">Товары</div>
-        <div class="nav-item" onclick="switchTab('categories')">Категории</div>
-        <div class="nav-item" onclick="switchTab('banners')">Слайдер</div>
-        <div class="nav-item" onclick="switchTab('brands')">Бренды</div>
-        <div class="nav-item" onclick="switchTab('seo')">SEO</div>
+        <div class="nav-item active" data-tab="products" onclick="switchTab('products')">Товары</div>
+        <div class="nav-item" data-tab="categories" onclick="switchTab('categories')">Категории</div>
+        <div class="nav-item" data-tab="banners" onclick="switchTab('banners')">Слайдер</div>
+        <div class="nav-item" data-tab="brands" onclick="switchTab('brands')">Бренды</div>
+        <div class="nav-item" data-tab="seo" onclick="switchTab('seo')">SEO</div>
 
         <button class="btn btn-ghost logout-btn" onclick="logout()" style="width: 100%;">ВЫХОД</button>
       </nav>
@@ -1566,8 +1591,8 @@
         <div class="admin-header">
           <h1>ТОВАРЫ</h1>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-ghost" onclick="exportToExcel()">ЭКСПОРТ EXCEL</button>
-            <button class="btn btn-ghost" onclick="document.getElementById('import-file').click()">ИМПОРТ EXCEL</button>
+            <button class="btn btn-ghost" data-needs="flask" onclick="exportToExcel()">ЭКСПОРТ EXCEL</button>
+            <button class="btn btn-ghost" data-needs="flask" onclick="document.getElementById('import-file').click()">ИМПОРТ EXCEL</button>
             <input type="file" id="import-file" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
             <button class="btn btn-primary" onclick="openAddProductModal()">ДОБАВИТЬ ТОВАР</button>
           </div>
@@ -1929,8 +1954,10 @@
     </div>
   </div>
 
-  <script src="js/api.js?v=20261006"></script>
-  <script src="js/main.js?v=20261006"></script>
+  <script src="js/config.js?v=20261007"></script>
+  <script src="js/adapter-node.js?v=20261007"></script>
+  <script src="js/api.js?v=20261007"></script>
+  <script src="js/main.js?v=20261007"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -1942,10 +1969,80 @@
         return;
       }
 
+      adaptToBackend();
       loadProducts();
       loadCategoriesForSelect();
       loadBrandsForSelect();
     });
+
+    // ===== подстройка под бэкенд =====
+
+    // На их бэкенде цена и остаток принадлежат 1С, а категорий, брендов,
+    // слайдера, характеристик и Excel там нет вовсе. Показывать поля и
+    // кнопки, которые всё равно ответят ошибкой, — врать интерфейсом:
+    // такие места закрываются с объяснением, почему.
+    function adaptToBackend() {
+      if (!ON_NODE) return;
+
+      ['banners', 'brands', 'seo'].forEach(tab => {
+        const item = el(`.nav-item[data-tab="${tab}"]`);
+        if (item) item.hidden = true;
+      });
+
+      document.querySelectorAll('[data-needs="flask"]').forEach(node => {
+        node.hidden = true;
+      });
+
+      const owned = 'Ведёт 1С, через сайт не меняется';
+      [['#product-price', owned], ['#product-stock', owned],
+       ['#product-old-price', 'Скидок на этом бэкенде нет']]
+        .forEach(([selector, why]) => {
+          const field = el(selector);
+          if (!field) return;
+          field.readOnly = true;
+          field.required = false;
+          field.title = why;
+          const group = field.closest('.form-group');
+          group.classList.add('form-group-locked');
+          // Звёздочка у поля, которое не заполняют, только путает
+          const label = group.querySelector('label');
+          label.textContent = label.textContent.replace(' *', '');
+          field.insertAdjacentHTML('afterend',
+            `<small class="form-hint">${why}</small>`);
+        });
+
+      // Бренда и характеристик на той стороне нет — прятать целиком
+      ['#product-brand', '#spec-rows'].forEach(selector => {
+        const group = el(selector)?.closest('.form-group');
+        if (group) group.hidden = true;
+      });
+
+      el('#product-sku').insertAdjacentHTML('afterend',
+        '<small class="form-hint">Введите артикул точно как в 1С, иначе цена ' +
+        'и остаток не подтянутся при синхронизации. После создания артикул ' +
+        'не меняется.</small>');
+
+      // Категориями на их бэкенде сайт не управляет
+      const categories = el('#categories-section');
+      if (categories) {
+        categories.insertAdjacentHTML('afterbegin',
+          '<div class="notice">Дерево категорий на этом бэкенде только для ' +
+          'чтения: эндпоинтов для их правки в API нет.</div>');
+      }
+    }
+
+    // Артикул уже занят: вместо «ошибка 409» — предложить открыть тот товар
+    async function offerExisting(error) {
+      if (!error.existing) return false;
+
+      const { id, article, name } = error.existing;
+      if (!confirm(`${error.message}\n\nОткрыть карточку «${name}» (${article})?`)) {
+        return true;
+      }
+      closeProductModal();
+      await editProduct(id);
+      return true;
+    }
 
     // Tab switching
     function switchTab(tab) {
@@ -2062,8 +2159,7 @@
       document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       el(`#${tab}-section`).classList.add('active');
-      document.querySelectorAll('.nav-item')[['products', 'categories', 'brands', 'seo'].indexOf(tab)]
-        .classList.add('active');
+      el(`.nav-item[data-tab="${tab}"]`).classList.add('active');
     }
 
     let trafficDays = 30;
@@ -3187,6 +3283,7 @@
           editProduct(product.id);
         }
       } catch (error) {
+        if (await offerExisting(error)) return;
         showNotification('Ошибка: ' + error.message, 'error');
       }
     });
@@ -3198,7 +3295,8 @@
           showNotification('Товар удален');
           loadProducts();
         } catch (error) {
-          showNotification('Ошибка удаления', 'error');
+          // Сервер объясняет отказ словами — их и показываем
+          showNotification(error.message, 'error');
         }
       }
     }

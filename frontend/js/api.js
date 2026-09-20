@@ -23,6 +23,20 @@ function authHeader() {
 
 const AuthAPI = {
   login: async (username, password) => {
+    // У их админки нет входа как такового: логин и пароль едут в каждом
+    // запросе. Значит и проверить их можно только запросом.
+    if (ON_NODE) {
+      NodeAPI.rememberCredentials(username, password);
+      try {
+        await NodeAPI.checkCredentials();
+      } catch (error) {
+        NodeAPI.forgetCredentials();
+        throw new Error(error.status === 401
+          ? 'Неверный логин или пароль' : error.message);
+      }
+      return { user: { username } };
+    }
+
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -39,6 +53,11 @@ const AuthAPI = {
   },
 
   logout: async () => {
+    if (ON_NODE) {
+      NodeAPI.forgetCredentials();
+      return;
+    }
+
     try {
       await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: authHeader() });
     } finally {
@@ -47,6 +66,17 @@ const AuthAPI = {
   },
 
   isSignedIn: async () => {
+    if (ON_NODE) {
+      if (!NodeAPI.basicHeader().Authorization) return false;
+      try {
+        return await NodeAPI.checkCredentials();
+      } catch (error) {
+        if (error.status === 401) NodeAPI.forgetCredentials();
+        // Недоступный сервер не значит, что пароль перестал подходить
+        return error.status !== 401;
+      }
+    }
+
     if (!adminToken()) return false;
     try {
       const response = await fetch(`${API_BASE}/auth/check`, { headers: authHeader() });
@@ -64,7 +94,9 @@ function uploadWithProgress(url, formData, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
-    xhr.setRequestHeader('Authorization', `Bearer ${adminToken()}`);
+    // Заголовок авторизации зависит от бэкенда: у нас токен, у них Basic
+    Object.entries(authHeader()).forEach(([name, value]) =>
+      xhr.setRequestHeader(name, value));
 
     xhr.upload.onprogress = (event) => {
       if (onProgress && event.lengthComputable) {
@@ -87,7 +119,11 @@ function uploadWithProgress(url, formData, onProgress) {
       } else if (xhr.status === 413) {
         reject(new Error('Файл слишком большой для сервера'));
       } else {
-        reject(new Error(result.error || `Сервер ответил ошибкой ${xhr.status}`));
+        const error = new Error(result.error || `Сервер ответил ошибкой ${xhr.status}`);
+        error.status = xhr.status;
+        error.code = result.code;
+        error.existing = result.existing;
+        reject(error);
       }
     };
 
@@ -136,6 +172,8 @@ async function apiCall(endpoint, options = {}) {
 // Product API
 const ProductAPI = {
   getProducts: (filters = {}) => {
+    if (ON_NODE) return NodeAPI.products(filters);
+
     const params = new URLSearchParams();
     if (filters.category_id) params.append('category_id', filters.category_id);
     if (filters.brand_id) params.append('brand_id', filters.brand_id);
@@ -147,36 +185,45 @@ const ProductAPI = {
     return apiCall(`/products?${params.toString()}`);
   },
 
-  getProduct: (id) => apiCall(`/products/${id}`),
+  getProduct: (id) => ON_NODE ? NodeAPI.product(id) : apiCall(`/products/${id}`),
 
   // The same part in its other sizes, from the same subcategory
-  getVariants: (id) => apiCall(`/products/${id}/variants`),
+  getVariants: (id) =>
+    ON_NODE ? NodeAPI.nothing() : apiCall(`/products/${id}/variants`),
 
-  search: (query) => apiCall(`/products/search?q=${encodeURIComponent(query)}`),
+  search: (query) =>
+    ON_NODE
+      ? NodeAPI.products({ search: query }).then(result => result.products)
+      : apiCall(`/products/search?q=${encodeURIComponent(query)}`),
 
   // The tree: every section with its subcategories nested inside
-  getCategories: () => apiCall('/categories'),
+  getCategories: () => ON_NODE ? NodeAPI.categoryTree() : apiCall('/categories'),
 
   // One flat list, when a screen only needs the names
-  getCategoriesFlat: () => apiCall('/categories?flat=1'),
+  getCategoriesFlat: () =>
+    ON_NODE ? NodeAPI.categoriesFlat() : apiCall('/categories?flat=1'),
 
   // A category with its children and the path back to the root
-  getCategory: (id) => apiCall(`/categories/${id}`),
+  getCategory: (id) => ON_NODE ? NodeAPI.category(id) : apiCall(`/categories/${id}`),
 
-  getBrands: () => apiCall('/brands'),
+  getBrands: () => ON_NODE ? NodeAPI.nothing() : apiCall('/brands'),
 
   // The slides on the home page
-  getBanners: () => apiCall('/banners')
+  getBanners: () => ON_NODE ? NodeAPI.nothing() : apiCall('/banners')
 };
 
 // Admin API
 const AdminAPI = {
   getProducts: (page = 1) => {
+    if (ON_NODE) return NodeAPI.adminProducts(page);
+
     const headers = authHeader();
     return apiCall(`/admin/products?page=${page}`, { headers });
   },
 
   createProduct: (data) => {
+    if (ON_NODE) return NodeAPI.createProduct(data);
+
     const headers = authHeader();
     return apiCall('/admin/products', {
       method: 'POST',
@@ -186,6 +233,8 @@ const AdminAPI = {
   },
 
   updateProduct: (id, data) => {
+    if (ON_NODE) return NodeAPI.updateProduct(id, data);
+
     const headers = authHeader();
     return apiCall(`/admin/products/${id}`, {
       method: 'PUT',
@@ -195,6 +244,14 @@ const AdminAPI = {
   },
 
   deleteProduct: (id) => {
+    // Удаления у них нет, и это не упущение: товар живёт в 1С. Снятый с
+    // витрины товар с неё пропадает, а в админке остаётся.
+    if (ON_NODE) {
+      return Promise.reject(new Error(
+        'Этот бэкенд не умеет удалять товары: они приходят из 1С. ' +
+        'Снимите галочку «Показывать на витрине» — товар исчезнет с сайта.'));
+    }
+
     const headers = authHeader();
     return apiCall(`/admin/products/${id}`, {
       method: 'DELETE',
@@ -204,22 +261,29 @@ const AdminAPI = {
 
   uploadImage: (productId, file, onProgress) => {
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append(ON_NODE ? 'files' : 'image', file);
 
-    return uploadWithProgress(
-      `${API_BASE}/admin/products/${productId}/upload-image`, formData, onProgress);
+    return uploadWithProgress(ON_NODE
+      ? `${NodeAPI.conf().admin}/products/${productId}/media`
+      : `${API_BASE}/admin/products/${productId}/upload-image`, formData, onProgress);
   },
 
   uploadVideoFile: (productId, file, title = '', onProgress) => {
     const formData = new FormData();
-    formData.append('video', file);
-    formData.append('title', title);
+    // У них фото и видео идут одной дорогой, тип определяется по файлу
+    formData.append(ON_NODE ? 'files' : 'video', file);
+    if (!ON_NODE) formData.append('title', title);
 
-    return uploadWithProgress(
-      `${API_BASE}/admin/products/${productId}/upload-video-file`, formData, onProgress);
+    return uploadWithProgress(ON_NODE
+      ? `${NodeAPI.conf().admin}/products/${productId}/media`
+      : `${API_BASE}/admin/products/${productId}/upload-video-file`,
+      formData, onProgress);
   },
 
   addVideo: (productId, data) => {
+    // Они хранят только загруженные файлы, ссылки на YouTube им некуда деть
+    if (ON_NODE) return NodeAPI.missing('Видео по ссылке');
+
     const headers = authHeader();
     return apiCall(`/admin/products/${productId}/upload-video`, {
       method: 'POST',
@@ -229,6 +293,8 @@ const AdminAPI = {
   },
 
   deleteVideo: (productId, videoId) => {
+    if (ON_NODE) return NodeAPI.deleteMedia(productId, videoId);
+
     const headers = authHeader();
     return apiCall(`/admin/products/${productId}/videos/${videoId}`, {
       method: 'DELETE',
@@ -237,11 +303,15 @@ const AdminAPI = {
   },
 
   getCategories: () => {
+    if (ON_NODE) return NodeAPI.adminCategoryTree();
+
     const headers = authHeader();
     return apiCall('/admin/categories', { headers });
   },
 
   createCategory: (data) => {
+    if (ON_NODE) return NodeAPI.missing('Создания категорий');
+
     const headers = authHeader();
     return apiCall('/admin/categories', {
       method: 'POST',
@@ -252,6 +322,8 @@ const AdminAPI = {
 
   // Rename a category, or move it under another one
   updateCategory: (id, data) => {
+    if (ON_NODE) return NodeAPI.missing('Изменения категорий');
+
     const headers = authHeader();
     return apiCall(`/admin/categories/${id}`, {
       method: 'PUT',
@@ -261,6 +333,8 @@ const AdminAPI = {
   },
 
   deleteCategory: (id) => {
+    if (ON_NODE) return NodeAPI.missing('Удаления категорий');
+
     const headers = authHeader();
     return apiCall(`/admin/categories/${id}`, {
       method: 'DELETE',
@@ -270,6 +344,8 @@ const AdminAPI = {
 
   // The picture on a category's tile, instead of one borrowed from a product
   uploadCategoryIcon: (id, file, onProgress) => {
+    if (ON_NODE) return NodeAPI.missing('Картинок категорий');
+
     const formData = new FormData();
     formData.append('image', file);
 
@@ -278,6 +354,8 @@ const AdminAPI = {
   },
 
   clearCategoryIcon: (id) => {
+    if (ON_NODE) return NodeAPI.missing('Картинок категорий');
+
     const headers = authHeader();
     return apiCall(`/admin/categories/${id}/upload-icon`, {
       method: 'DELETE',
@@ -287,9 +365,14 @@ const AdminAPI = {
 
   // ----- banners -----
 
-  getBanners: () => apiCall('/admin/banners', { headers: authHeader() }),
+  // Списки пустые, а не с ошибкой: админка открывается и работает в той
+  // части, которую их бэкенд умеет. Ошибку скажет попытка что-то записать.
+  getBanners: () =>
+    ON_NODE ? NodeAPI.nothing() : apiCall('/admin/banners', { headers: authHeader() }),
 
   createBanner: (file, fields = {}, onProgress) => {
+    if (ON_NODE) return NodeAPI.missing('Слайдера');
+
     const formData = new FormData();
     formData.append('image', file);
     Object.entries(fields).forEach(([name, value]) =>
@@ -299,22 +382,30 @@ const AdminAPI = {
   },
 
   updateBanner: (id, data) => {
+    if (ON_NODE) return NodeAPI.missing('Слайдера');
+
     const headers = authHeader();
     return apiCall(`/admin/banners/${id}`, { method: 'PUT', headers, body: data });
   },
 
   deleteBanner: (id) => {
+    if (ON_NODE) return NodeAPI.missing('Слайдера');
+
     const headers = authHeader();
     return apiCall(`/admin/banners/${id}`, { method: 'DELETE', headers });
   },
 
   reorderBanners: (ids) => {
+    if (ON_NODE) return NodeAPI.missing('Слайдера');
+
     const headers = authHeader();
     return apiCall('/admin/banners/order', { method: 'PUT', headers, body: { ids } });
   },
 
   // The order of one row of siblings, top to bottom
   reorderCategories: (ids) => {
+    if (ON_NODE) return NodeAPI.missing('Порядка категорий');
+
     const headers = authHeader();
     return apiCall('/admin/categories/order', {
       method: 'PUT',
@@ -325,20 +416,29 @@ const AdminAPI = {
 
   // How far a running import has got
   importProgress: (jobId) =>
+    ON_NODE ? NodeAPI.missing('Импорта из Excel') :
     apiCall(`/admin/import/progress/${encodeURIComponent(jobId)}`,
             { headers: authHeader() }),
 
-  seoCatalog: () => apiCall('/admin/seo/catalog', { headers: authHeader() }),
+  seoCatalog: () =>
+    ON_NODE ? NodeAPI.missing('Раздела SEO')
+            : apiCall('/admin/seo/catalog', { headers: authHeader() }),
 
-  seoTraffic: (days = 30) => apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
+  seoTraffic: (days = 30) =>
+    ON_NODE ? NodeAPI.missing('Статистики посещений')
+            : apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
 
   getBrands: () => {
+    if (ON_NODE) return NodeAPI.nothing();
+
     const headers = authHeader();
     return apiCall('/admin/brands', { headers });
   },
 
   // The logo rides along with the name, so a brand is created in one go
   createBrand: (name, logoFile, onProgress) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     if (!logoFile) {
       const headers = authHeader();
       return apiCall('/admin/brands', { method: 'POST', headers, body: { name } });
@@ -352,6 +452,8 @@ const AdminAPI = {
 
   // What a selection would hit, before anything is changed
   previewBrandSelection: (selection) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall('/admin/brands/preview', {
       method: 'POST',
@@ -362,6 +464,8 @@ const AdminAPI = {
 
   // The brand for the rows ticked in the product list
   setProductsBrand: (productIds, brandId) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall('/admin/products/brand', {
       method: 'PUT',
@@ -371,17 +475,23 @@ const AdminAPI = {
   },
 
   updateBrand: (id, data) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}`, { method: 'PUT', headers, body: data });
   },
 
   // Deleting a brand unlabels its products; it does not take them with it
   deleteBrand: (id) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}`, { method: 'DELETE', headers });
   },
 
   uploadBrandLogo: (id, file, onProgress) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const formData = new FormData();
     formData.append('image', file);
 
@@ -390,6 +500,8 @@ const AdminAPI = {
   },
 
   clearBrandLogo: (id) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}/upload-logo`, { method: 'DELETE', headers });
   },
@@ -397,6 +509,8 @@ const AdminAPI = {
   // Labels a whole branch of the catalogue, or every article number that
   // starts the same way. `clear: true` takes the label back off.
   assignBrand: (id, selection) => {
+    if (ON_NODE) return NodeAPI.missing('Брендов');
+
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}/assign`, {
       method: 'POST',

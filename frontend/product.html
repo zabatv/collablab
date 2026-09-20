@@ -115,10 +115,12 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20261006"></script>
-  <script src="js/main.js?v=20261006"></script>
-  <script src="js/effects.js?v=20261006"></script>
-  <script src="js/consent.js?v=20261006"></script>
+  <script src="js/config.js?v=20261007"></script>
+  <script src="js/adapter-node.js?v=20261007"></script>
+  <script src="js/api.js?v=20261007"></script>
+  <script src="js/main.js?v=20261007"></script>
+  <script src="js/effects.js?v=20261007"></script>
+  <script src="js/consent.js?v=20261007"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -139,8 +141,11 @@
         loadCategoryPath();
         loadRelatedProducts();
 
-        // Counted for the admin statistics; failure here must not affect the page
-        fetch(`${API_BASE}/track/view/${productId}`, { method: 'POST' }).catch(() => {});
+        // Counted for the admin statistics; failure here must not affect the
+        // page. Their backend keeps no statistics, so there is nobody to tell.
+        if (!ON_NODE) {
+          fetch(`${API_BASE}/track/view/${productId}`, { method: 'POST' }).catch(() => {});
+        }
       } catch (error) {
         console.error('Error loading product:', error);
         el('#product-container').innerHTML = '<div class="empty-state"><h2>Товар не найден</h2><p>Возможно, позицию сняли с продажи.</p><a class="btn btn-secondary" href="catalog.html">Вернуться в каталог</a></div>';
