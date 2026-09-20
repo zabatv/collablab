@@ -219,7 +219,7 @@ const ProductAPI = {
   // A category with its children and the path back to the root
   getCategory: (id) => ON_NODE ? NodeAPI.category(id) : apiCall(`/categories/${id}`),
 
-  getBrands: () => ON_NODE ? NodeAPI.nothing() : apiCall('/brands'),
+  getBrands: () => ON_NODE ? NodeAPI.brands() : apiCall('/brands'),
 
   // The slides on the home page
   getBanners: () => ON_NODE ? NodeAPI.nothing() : apiCall('/banners')
@@ -442,15 +442,21 @@ const AdminAPI = {
             : apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
 
   getBrands: () => {
-    if (ON_NODE) return NodeAPI.nothing();
+    if (ON_NODE) return NodeAPI.brandsAdmin();
 
     const headers = authHeader();
     return apiCall('/admin/brands', { headers });
   },
 
   // The logo rides along with the name, so a brand is created in one go
-  createBrand: (name, logoFile, onProgress) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+  createBrand: async (name, logoFile, onProgress) => {
+    // У сервиса брендов имя и логотип идут двумя запросами: сначала бренд,
+    // потом картинка — ей нужен id, которого до создания нет
+    if (ON_NODE) {
+      const brand = await NodeAPI.createBrand(name);
+      return logoFile ? AdminAPI.uploadBrandLogo(brand.id, logoFile, onProgress)
+                      : brand;
+    }
 
     if (!logoFile) {
       const headers = authHeader();
@@ -465,7 +471,7 @@ const AdminAPI = {
 
   // What a selection would hit, before anything is changed
   previewBrandSelection: (selection) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+    if (ON_NODE) return NodeAPI.previewRules(selection);
 
     const headers = authHeader();
     return apiCall('/admin/brands/preview', {
@@ -488,7 +494,7 @@ const AdminAPI = {
   },
 
   updateBrand: (id, data) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+    if (ON_NODE) return NodeAPI.updateBrand(id, data);
 
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}`, { method: 'PUT', headers, body: data });
@@ -496,24 +502,24 @@ const AdminAPI = {
 
   // Deleting a brand unlabels its products; it does not take them with it
   deleteBrand: (id) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+    if (ON_NODE) return NodeAPI.deleteBrand(id);
 
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}`, { method: 'DELETE', headers });
   },
 
   uploadBrandLogo: (id, file, onProgress) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
-
     const formData = new FormData();
     formData.append('image', file);
 
-    return uploadWithProgress(
-      `${API_BASE}/admin/brands/${id}/upload-logo`, formData, onProgress);
+    return uploadWithProgress(ON_NODE
+      ? `${NodeAPI.conf().brands}/admin/brands/${id}/logo`
+      : `${API_BASE}/admin/brands/${id}/upload-logo`, formData, onProgress)
+      .then(brand => (ON_NODE && NodeAPI.forgetBrands(), brand));
   },
 
   clearBrandLogo: (id) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+    if (ON_NODE) return NodeAPI.clearBrandLogo(id);
 
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}/upload-logo`, { method: 'DELETE', headers });
@@ -521,8 +527,14 @@ const AdminAPI = {
 
   // Labels a whole branch of the catalogue, or every article number that
   // starts the same way. `clear: true` takes the label back off.
+  // На их бэкенде бренд не висит на товаре: он описан рядами артикулов
+  // в нашем сервисе, и «назначить» значит переписать эти ряды
+  setBrandRules: (id, rules) =>
+    ON_NODE ? NodeAPI.setBrandRules(id, rules)
+            : NodeAPI.missing('Правил брендов'),
+
   assignBrand: (id, selection) => {
-    if (ON_NODE) return NodeAPI.missing('Брендов');
+    if (ON_NODE) return NodeAPI.missing('Назначения бренда по разделам');
 
     const headers = authHeader();
     return apiCall(`/admin/brands/${id}/assign`, {

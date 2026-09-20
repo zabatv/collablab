@@ -1984,7 +1984,12 @@
     function adaptToBackend() {
       if (!ON_NODE) return;
 
-      ['banners', 'brands', 'seo'].forEach(tab => {
+      // Бренды держит наш сервис, а не их бэкенд: раздел остаётся, если
+      // адрес сервиса задан в config.js
+      const gone = NodeAPI.conf().brands
+        ? ['banners', 'seo'] : ['banners', 'brands', 'seo'];
+
+      gone.forEach(tab => {
         const item = el(`.nav-item[data-tab="${tab}"]`);
         if (item) item.hidden = true;
       });
@@ -3884,17 +3889,35 @@
       previewTimer = setTimeout(runPreview, 250);
     }
 
+    // На их бэкенде бренд не висит на товаре: он описан рядами артикулов в
+    // нашем сервисе. Раздел при этом разворачивается в список артикулов —
+    // снимок того, что в нём лежит сейчас.
+    async function brandSelection() {
+      const category = el('#assign-category').value;
+      const prefix = el('#assign-prefix').value.trim();
+
+      if (!ON_NODE) {
+        const selection = {};
+        if (category) selection.category_id = Number(category);
+        if (prefix) selection.sku_prefix = prefix;
+        return selection;
+      }
+
+      return {
+        prefixes: prefix ? [prefix] : [],
+        articles: category ? await NodeAPI.articlesInCategory(category) : [],
+      };
+    }
+
+    const emptySelection = (selection) =>
+      !selection.category_id && !selection.sku_prefix
+      && !(selection.prefixes || []).length && !(selection.articles || []).length;
+
     async function runPreview() {
       const host = el('#assign-preview');
-      const selection = {};
+      const selection = await brandSelection();
 
-      const category = el('#assign-category').value;
-      if (category) selection.category_id = Number(category);
-
-      const prefix = el('#assign-prefix').value.trim();
-      if (prefix) selection.sku_prefix = prefix;
-
-      if (!selection.category_id && !selection.sku_prefix) {
+      if (emptySelection(selection)) {
         host.className = 'assign-preview';
         host.textContent = 'Укажите условие, и здесь появится, сколько товаров под него попадёт';
         return;
@@ -3954,18 +3977,34 @@
       event.preventDefault();
       if (!assigningBrand) return;
 
-      const selection = { clear: el('#assign-clear').checked };
-      const category = el('#assign-category').value;
-      if (category) selection.category_id = Number(category);
-
-      const prefix = el('#assign-prefix').value.trim();
-      if (prefix) selection.sku_prefix = prefix;
+      const clear = el('#assign-clear').checked;
 
       try {
-        const result = await AdminAPI.assignBrand(assigningBrand.id, selection);
-        showNotification(selection.clear
-          ? `Метка снята с ${result.updated} товаров`
-          : `Бренд проставлен ${result.updated} товарам`);
+        if (ON_NODE) {
+          const picked = await brandSelection();
+          const prefixes = new Set(assigningBrand.prefixes || []);
+          const articles = new Set(assigningBrand.articles || []);
+
+          const change = (set, values) => values.forEach(value =>
+            clear ? set.delete(value) : set.add(value));
+          change(prefixes, picked.prefixes || []);
+          change(articles, picked.articles || []);
+
+          await AdminAPI.setBrandRules(assigningBrand.id, {
+            prefixes: [...prefixes], articles: [...articles] });
+
+          const hit = await AdminAPI.previewBrandSelection(picked);
+          showNotification(clear
+            ? `Бренд снят с ${hit.count} товаров`
+            : `Бренд проставлен ${hit.count} товарам`);
+        } else {
+          const selection = { ...(await brandSelection()), clear };
+          const result = await AdminAPI.assignBrand(assigningBrand.id, selection);
+          showNotification(clear
+            ? `Метка снята с ${result.updated} товаров`
+            : `Бренд проставлен ${result.updated} товарам`);
+        }
+
         closeAssignBrand();
         loadBrands();
       } catch (error) {

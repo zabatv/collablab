@@ -60,6 +60,174 @@ const NodeAPI = (() => {
   const readAdmin = (path, options = {}) =>
     call(conf().admin, path, { ...options, headers: { ...basicHeader(), ...(options.headers || {}) } });
 
+  /* ---------- бренды ---------- */
+
+  // Бренды живут в нашем сервисе: их бэкенд про них не знает. Связь с
+  // товаром — по артикулу, потому что товары теперь чужие и их id нам не
+  // принадлежат, а артикул общий и у них, и у нас, и в 1С.
+  const NO_BRANDS = { brands: [], prefixes: [], articles: {}, byId: new Map() };
+  let brandsLoaded = null;
+
+  // Артикул без регистра, пробелов и знаков: FA40 и FA-40 — одно и то же,
+  // ровно как сопоставляет их бэкенд с 1С
+  const looseKey = (article) =>
+    String(article || '').replace(/[^0-9a-zA-Zа-яА-ЯёЁ]+/g, '').toLowerCase();
+
+  async function brandMap() {
+    if (brandsLoaded) return brandsLoaded;
+
+    const base = conf().brands;
+    if (!base) return (brandsLoaded = NO_BRANDS);
+
+    try {
+      const data = await call(base, '/map');
+      // Длинный ряд артикулов точнее короткого, поэтому проверяется первым
+      data.prefixes.sort((a, b) => b.value.length - a.value.length);
+      data.byId = new Map(data.brands.map(brand => [brand.id, {
+        ...brand,
+        logo: brand.logo ? `${base}${brand.logo}` : null,
+      }]));
+      return (brandsLoaded = data);
+    } catch (error) {
+      // Сервис брендов молчит — витрина работает без них, а не падает
+      console.warn('Бренды недоступны:', error.message);
+      return (brandsLoaded = NO_BRANDS);
+    }
+  }
+
+  // Синхронно, по уже загруженной карте: adaptProduct вызывается пачками
+  function brandOf(article) {
+    const map = brandsLoaded;
+    if (!map) return null;
+
+    const key = looseKey(article);
+    if (!key) return null;
+
+    const exact = map.articles[key];
+    if (exact) return map.byId.get(exact) || null;
+
+    const rule = map.prefixes.find(prefix => key.startsWith(prefix.value));
+    return rule ? map.byId.get(rule.brand_id) || null : null;
+  }
+
+  // Бренды, за которыми стоят товары. Пустой бренд в фильтре — строка,
+  // которая всегда возвращает ничего.
+  async function brands() {
+    const [map, items] = await Promise.all([brandMap(), catalogue()]);
+    const counts = new Map();
+
+    items.forEach(item => {
+      const brand = brandOf(item.article);
+      if (brand) counts.set(brand.id, (counts.get(brand.id) || 0) + 1);
+    });
+
+    return map.brands
+      .filter(brand => counts.get(brand.id))
+      .map(brand => ({ ...map.byId.get(brand.id),
+                       product_count: counts.get(brand.id) }));
+  }
+
+  /* ---------- бренды: правка ---------- */
+
+  // Сервис брендов проверяет тот же логин и пароль, что их админский
+  // сервер, — в админке один вход на оба
+  const callBrands = (path, options = {}) =>
+    call(conf().brands, path, {
+      ...options,
+      headers: { ...basicHeader(), ...(options.headers || {}) },
+    });
+
+  // После правки карту надо перечитать, иначе витрина в этой вкладке
+  // останется со старыми привязками
+  const forgetBrands = () => { brandsLoaded = null; };
+
+  const withLogo = (brand) => ({
+    ...brand,
+    logo: brand.logo ? `${conf().brands}${brand.logo}` : null,
+  });
+
+  // Список для админки: с рядами артикулов и с тем, сколько товаров
+  // каждый бренд реально накрывает
+  async function brandsAdmin() {
+    forgetBrands();
+    const [list, items] = await Promise.all([
+      callBrands('/brands'),
+      catalogue().catch(() => []),
+      brandMap(),
+    ]);
+
+    const counts = new Map();
+    items.forEach(item => {
+      const brand = brandOf(item.article);
+      if (brand) counts.set(brand.id, (counts.get(brand.id) || 0) + 1);
+    });
+
+    return list.map(brand => ({
+      ...withLogo(brand),
+      product_count: counts.get(brand.id) || 0,
+    }));
+  }
+
+  const createBrand = (name) =>
+    callBrands('/admin/brands', { method: 'POST', body: { name } })
+      .then(brand => (forgetBrands(), withLogo(brand)));
+
+  const updateBrand = (id, data) =>
+    callBrands(`/admin/brands/${id}`, { method: 'PUT', body: data })
+      .then(brand => (forgetBrands(), withLogo(brand)));
+
+  const deleteBrand = (id) =>
+    callBrands(`/admin/brands/${id}`, { method: 'DELETE' })
+      .then(() => forgetBrands());
+
+  const clearBrandLogo = (id) =>
+    callBrands(`/admin/brands/${id}/logo`, { method: 'DELETE' })
+      .then(brand => (forgetBrands(), withLogo(brand)));
+
+  // Ряды артикулов бренда и отдельные артикулы — целиком, одним списком
+  const setBrandRules = (id, rules) =>
+    callBrands(`/admin/brands/${id}/rules`, { method: 'PUT', body: rules })
+      .then(brand => (forgetBrands(), withLogo(brand)));
+
+  // Что накроет правило, до того как его сохранят
+  async function previewRules({ prefixes = [], articles = [] }) {
+    const [items] = await Promise.all([catalogue(), brandMap()]);
+    const heads = prefixes.map(looseKey).filter(Boolean);
+    const exact = new Set(articles.map(looseKey).filter(Boolean));
+
+    const hit = items.filter(item => {
+      const key = looseKey(item.article);
+      return exact.has(key) || heads.some(head => key.startsWith(head));
+    });
+
+    return {
+      count: hit.length,
+      sample: hit.slice(0, 8).map(item => ({
+        sku: item.article,
+        name: item.name,
+        brand: brandOf(item.article)?.name || null,
+      })),
+    };
+  }
+
+  // Артикулы раздела вместе с подкатегориями. Раздел — понятие их каталога,
+  // а правило бренда живёт на артикулах, поэтому одно разворачивается в
+  // другое: это снимок, новые товары раздела сами бренд не получат.
+  async function articlesInCategory(categoryId) {
+    const [items, tree] = await Promise.all([catalogue(), categoryTree()]);
+
+    const branch = new Set();
+    const walk = (node) => {
+      if (!node) return;
+      branch.add(node.id);
+      node.children.forEach(walk);
+    };
+    walk(findInTree(tree, Number(categoryId)));
+
+    return items.filter(item => branch.has(item.category?.id))
+                .map(item => item.article);
+  }
+
   /* ---------- товар ---------- */
 
   // Ссылки на медиа относительные. Базовым всегда берётся публичный
@@ -82,8 +250,8 @@ const NodeAPI = (() => {
       sku: item.article,
       name: item.name,
       category: item.category || null,
-      // Брендов на той стороне нет вовсе
-      brand: null,
+      // Бренда у них нет; он приходит из нашего сервиса, по артикулу
+      brand: brandOf(item.article),
       price: item.price,
       old_price: null,
       stock: item.quantity ?? 0,
@@ -138,8 +306,8 @@ const NodeAPI = (() => {
     if (filters.page) params.append('page', filters.page);
     if (filters.per_page) params.append('limit', Math.min(filters.per_page, 100));
 
-    // brand_id не передаём: брендов на той стороне нет, и фильтр по ним
-    // на витрине не показывается
+    // brand_id не передаём: бренды наши, их API про них не знает. Отбор
+    // по бренду идёт другой дорогой, см. byBrand.
 
     return params.toString();
   }
@@ -214,72 +382,75 @@ const NodeAPI = (() => {
     return null;
   }
 
-  /* ---------- картинки категорий ---------- */
+  /* ---------- каталог целиком ---------- */
 
-  // Картинки у категории в их API нет, а плитки на главной без неё пустые.
-  // Поэтому фотография берётся взаймы у товара, как это делал наш бэкенд.
-  // Ради этого список товаров прочитывается целиком — по сотне за раз,
-  // первая страница последовательно, остальные разом — и раскладывается
-  // по категориям. На сессию результат запоминается.
-  const PREVIEW_KEY = 'category_previews';
-  let previews = null;
+  // Список товаров читается один раз и пригождается трижды: из него берутся
+  // фотографии для плиток категорий, из него же считаются бренды и по нему
+  // отбираются товары бренда — фильтровать по бренду их API не умеет, бренды
+  // не его. По сотне за раз: первая страница последовательно, остальные разом.
+  let everything = null;
 
-  function rememberPreviews(found) {
-    previews = found;
-    try {
-      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(found));
-    } catch (error) {
-      // приватное окно или запрет на хранилище: обойдёмся памятью
-    }
-    return found;
-  }
-
-  function collectPhotos(items, into) {
-    items.forEach(item => {
-      const id = item.category?.id;
-      if (id && item.photo && !into[id]) into[id] = withBase(item.photo);
-    });
-    return into;
-  }
-
-  async function categoryPreviews() {
-    if (previews) return previews;
-    try {
-      const stored = sessionStorage.getItem(PREVIEW_KEY);
-      if (stored) return (previews = JSON.parse(stored));
-    } catch (error) {
-      // хранилище недоступно, читаем как в первый раз
-    }
+  async function catalogue() {
+    if (everything) return everything;
 
     const first = await readPublic('/products?limit=100&page=1');
-    const found = collectPhotos(first.items || [], {});
+    const items = [...(first.items || [])];
 
     const rest = [];
     for (let page = 2; page <= Math.min(first.pages || 1, 20); page++) {
       rest.push(readPublic(`/products?limit=100&page=${page}`));
     }
-    (await Promise.all(rest)).forEach(data => collectPhotos(data.items || [], found));
+    (await Promise.all(rest)).forEach(data => items.push(...(data.items || [])));
 
-    return rememberPreviews(found);
+    return (everything = items);
   }
 
-  // Своё фото, а если товары лежат глубже — первое найденное в ветке
-  function paintPreviews(nodes, found) {
-    nodes.forEach(node => {
-      paintPreviews(node.children, found);
-      node.image = found[node.id]
-        || node.children.map(child => child.image).find(Boolean)
-        || null;
+  // Что список товаров знает о категории: фотографию для плитки и какие
+  // бренды в ней лежат. Ноль в наборе — товар без бренда.
+  function categoryFacts(items) {
+    const photo = {};
+    const inside = {};
+
+    items.forEach(item => {
+      const id = item.category?.id;
+      if (!id) return;
+
+      if (item.photo && !photo[id]) photo[id] = withBase(item.photo);
+      (inside[id] = inside[id] || new Set()).add(brandOf(item.article)?.id || 0);
     });
-    return nodes;
+
+    return { photo, inside };
+  }
+
+  // Фотография — своя или первая найденная в ветке. Бренд — только если он
+  // у всей ветки один: раздел с товарами двух марок ничей.
+  function paintNode(node, facts, byId) {
+    const found = new Set(facts.inside[node.id] || []);
+    node.children.forEach(child =>
+      paintNode(child, facts, byId).forEach(id => found.add(id)));
+
+    node.image = facts.photo[node.id]
+      || node.children.map(child => child.image).find(Boolean)
+      || null;
+
+    const single = found.size === 1 ? [...found][0] : 0;
+    node.brand_id = single || null;
+    node.brand = single ? byId.get(single) || null : null;
+
+    return found;
   }
 
   async function categoryTree() {
-    const [data, found] = await Promise.all([
+    const [data, map, items] = await Promise.all([
       readPublic('/categories'),
-      categoryPreviews().catch(() => ({})),
+      brandMap(),
+      catalogue().catch(() => []),
     ]);
-    return paintPreviews(buildTree(data.items || []), found);
+
+    const roots = buildTree(data.items || []);
+    const facts = categoryFacts(items);
+    roots.forEach(node => paintNode(node, facts, map.byId));
+    return roots;
   }
 
   // Ветка нужна дереву, но не тому, кто спрашивал про одну категорию
@@ -312,10 +483,72 @@ const NodeAPI = (() => {
   /* ---------- витрина ---------- */
 
   async function products(filters = {}) {
-    return adaptList(await readPublic(`/products?${listQuery(filters)}`));
+    if (filters.brand_id) return byBrand(filters);
+
+    // Бренды должны быть под рукой раньше товаров: adaptProduct берёт их
+    // из уже загруженной карты
+    const [, data] = await Promise.all([
+      brandMap(),
+      readPublic(`/products?${listQuery(filters)}`),
+    ]);
+    return adaptList(data);
   }
 
-  const product = async (id) => adaptProduct(await readPublic(`/products/${id}`));
+  async function product(id) {
+    const [, item] = await Promise.all([
+      brandMap(),
+      readPublic(`/products/${id}`),
+    ]);
+    return adaptProduct(item);
+  }
+
+  // Отбор по бренду их API не умеет — бренды не его. Поэтому фильтр,
+  // сортировка и страницы считаются здесь, по уже прочитанному каталогу.
+  const LOCAL_SORTS = {
+    name: (a, b) => a.name.localeCompare(b.name, 'ru'),
+    price_asc: (a, b) => (a.price ?? Infinity) - (b.price ?? Infinity),
+    price_desc: (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
+    newest: (a, b) => String(b.updated_at).localeCompare(String(a.updated_at)),
+  };
+
+  async function byBrand(filters) {
+    const [, items, tree] = await Promise.all([
+      brandMap(), catalogue(), categoryTree(),
+    ]);
+
+    const wanted = Number(filters.brand_id);
+    let list = items.filter(item => brandOf(item.article)?.id === wanted);
+
+    if (filters.category_id) {
+      const branch = new Set();
+      const walk = (node) => {
+        if (!node) return;
+        branch.add(node.id);
+        node.children.forEach(walk);
+      };
+      walk(findInTree(tree, Number(filters.category_id)));
+      list = list.filter(item => branch.has(item.category?.id));
+    }
+
+    if (filters.search) {
+      const needle = String(filters.search).toLowerCase();
+      list = list.filter(item =>
+        String(item.name).toLowerCase().includes(needle)
+        || String(item.article).toLowerCase().includes(needle));
+    }
+
+    list = [...list].sort(LOCAL_SORTS[filters.sort] || LOCAL_SORTS.name);
+
+    const perPage = filters.per_page || 24;
+    const page = filters.page || 1;
+
+    return {
+      products: list.slice((page - 1) * perPage, page * perPage).map(adaptProduct),
+      total: list.length,
+      pages: Math.max(1, Math.ceil(list.length / perPage)),
+      current_page: page,
+    };
+  }
 
   /* ---------- админка ---------- */
 
@@ -396,6 +629,9 @@ const NodeAPI = (() => {
     basicHeader, rememberCredentials, forgetCredentials, checkCredentials,
     adaptProduct, adaptList, listQuery, buildTree, findInTree, pathTo,
     categoryTree, categoriesFlat, category, products, product,
+    brandMap, brandOf, brands, catalogue, looseKey,
+    brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
+    setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,
     readPublic, readAdmin, call, conf, nothing, missing, withBase,
   };

@@ -279,6 +279,51 @@ node: {
 Сайт и API оказываются на одном домене, поэтому CORS витрине вообще не нужен:
 браузер считает такие запросы своими.
 
+### Сервис брендов
+
+Их бэкенд про бренды не знает: ни поля у товара, ни справочника, ни
+эндпоинта, и из 1С они тоже не придут. Поэтому бренды держит наш маленький
+сервис на этом же VPS — справочник с логотипами и правила привязки к
+артикулам («всё, что начинается с NG-, — это PNEUMAX»). Заказчик правит их
+в админке сайта, как раньше.
+
+```bash
+cd /var/www/collablab
+python3 -m venv .venv
+.venv/bin/pip install -r services/brands/requirements.txt
+
+cat > /etc/systemd/system/shop-brands.service <<'UNIT'
+[Unit]
+Description=ROBOT brands service
+After=network.target
+
+[Service]
+WorkingDirectory=/var/www/collablab/services/brands
+Environment=ADMIN_USER=admin
+Environment=ADMIN_PASSWORD=ТОТ_ЖЕ_ПАРОЛЬ_ЧТО_В_ENV_НА_WINDOWS
+ExecStart=/var/www/collablab/.venv/bin/gunicorn --preload -w 2 \
+          -b 127.0.0.1:5001 app:app
+Restart=always
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+chown -R www-data:www-data /var/www/collablab/services/brands
+chmod 600 /etc/systemd/system/shop-brands.service   # в файле пароль
+systemctl daemon-reload
+systemctl enable --now shop-brands
+curl -s http://127.0.0.1:5001/health
+```
+
+Пароль обязан совпадать с `ADMIN_PASSWORD` на Windows: тогда в админке один
+вход на оба сервера. Без пароля сервис поднимется, но запись будет закрыта.
+
+Данные сервиса — `services/brands/data/brands.db` и логотипы рядом. Это
+единственное, что на VPS стоит копировать: каталог живёт на Windows.
+
 ### Админка
 
 Админский сервер слушает `127.0.0.1` и через туннель не проходит — так у них

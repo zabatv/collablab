@@ -24,5 +24,9 @@ window.SHOP_CONFIG = {
   node: {
     public: 'https://robots07.com/api',
     admin: 'https://robots07.com/admin-api',
+
+    // Наш сервис брендов: их бэкенд про бренды не знает, а менять их
+    // должен заказчик из админки. Пусто — разделы брендов не показываются.
+    brands: 'https://robots07.com/brands-api',
   },
 };
