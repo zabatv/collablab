@@ -142,8 +142,11 @@
         loadRelatedProducts();
 
         // Counted for the admin statistics; failure here must not affect the
-        // page. Their backend keeps no statistics, so there is nobody to tell.
-        if (!ON_NODE) {
+        // page. Their backend keeps no counters, so on it the count is kept
+        // by our own service.
+        if (ON_NODE) {
+          NodeAPI.trackView(productId);
+        } else {
           fetch(`${API_BASE}/track/view/${productId}`, { method: 'POST' }).catch(() => {});
         }
       } catch (error) {

@@ -81,4 +81,4 @@ tmp/
 frontend/sitemap.xml
 frontend/robots.txt
 .claude/settings.local.json
-services/brands/data/
+services/site/data/

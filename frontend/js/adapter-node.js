@@ -60,6 +60,59 @@ const NodeAPI = (() => {
   const readAdmin = (path, options = {}) =>
     call(conf().admin, path, { ...options, headers: { ...basicHeader(), ...(options.headers || {}) } });
 
+  /* ---------- наш сервис: бренды, слайдер, счётчики, SEO ---------- */
+
+  // Адрес сервиса. Старое имя brands понимается тоже: у кого-то в config.js
+  // осталось оно.
+  const siteBase = () => conf().site || conf().brands || '';
+
+  // Слайды на главной
+  async function banners() {
+    if (!siteBase()) return [];
+    try {
+      const list = await call(siteBase(), '/banners');
+      return list.map(withPicture);
+    } catch (error) {
+      console.warn('Слайдер недоступен:', error.message);
+      return [];
+    }
+  }
+
+  const withPicture = (slide) => ({
+    ...slide,
+    image: slide.image ? `${siteBase()}${slide.image}` : null,
+  });
+
+  const adminBanners = () =>
+    callSite('/admin/banners').then(list => list.map(withPicture));
+
+  const updateBanner = (id, data) =>
+    callSite(`/admin/banners/${id}`, { method: 'PUT', body: data })
+      .then(withPicture);
+
+  const deleteBanner = (id) =>
+    callSite(`/admin/banners/${id}`, { method: 'DELETE' });
+
+  const reorderBanners = (ids) =>
+    callSite('/admin/banners/order', { method: 'PUT', body: { ids } });
+
+  // Счётчики: сколько раз открыли товар и что искали. Ни адреса, ни
+  // идентификатора посетителя — только сами числа.
+  function trackView(productId) {
+    if (!siteBase()) return;
+    call(siteBase(), `/track/view/${productId}`, { method: 'POST' })
+      .catch(() => {});
+  }
+
+  function trackSearch(query, results) {
+    if (!siteBase() || !query) return;
+    call(siteBase(), '/track/search',
+         { method: 'POST', body: { query, results } }).catch(() => {});
+  }
+
+  const seoTraffic = (days = 30) => callSite(`/admin/seo/traffic?days=${days}`);
+  const seoCatalog = () => callSite('/admin/seo/catalog');
+
   /* ---------- бренды ---------- */
 
   // Бренды живут в нашем сервисе: их бэкенд про них не знает. Связь с
@@ -76,7 +129,7 @@ const NodeAPI = (() => {
   async function brandMap() {
     if (brandsLoaded) return brandsLoaded;
 
-    const base = conf().brands;
+    const base = siteBase();
     if (!base) return (brandsLoaded = NO_BRANDS);
 
     try {
@@ -129,13 +182,15 @@ const NodeAPI = (() => {
 
   /* ---------- бренды: правка ---------- */
 
-  // Сервис брендов проверяет тот же логин и пароль, что их админский
-  // сервер, — в админке один вход на оба
-  const callBrands = (path, options = {}) =>
-    call(conf().brands, path, {
+  // Наш сервис проверяет тот же логин и пароль, что их админский сервер, —
+  // в админке один вход на оба
+  const callSite = (path, options = {}) =>
+    call(siteBase(), path, {
       ...options,
       headers: { ...basicHeader(), ...(options.headers || {}) },
     });
+
+  const callBrands = callSite;
 
   // После правки карту надо перечитать, иначе витрина в этой вкладке
   // останется со старыми привязками
@@ -143,7 +198,7 @@ const NodeAPI = (() => {
 
   const withLogo = (brand) => ({
     ...brand,
-    logo: brand.logo ? `${conf().brands}${brand.logo}` : null,
+    logo: brand.logo ? `${siteBase()}${brand.logo}` : null,
   });
 
   // Список для админки: с рядами артикулов и с тем, сколько товаров
@@ -491,6 +546,13 @@ const NodeAPI = (() => {
       brandMap(),
       readPublic(`/products?${listQuery(filters)}`),
     ]);
+
+    // Что ищут — в счётчики, но только первая страница запроса, иначе
+    // перелистывание засчитается как новый поиск
+    if (filters.search && (filters.page || 1) === 1) {
+      trackSearch(filters.search, data.total || 0);
+    }
+
     return adaptList(data);
   }
 
@@ -630,6 +692,8 @@ const NodeAPI = (() => {
     adaptProduct, adaptList, listQuery, buildTree, findInTree, pathTo,
     categoryTree, categoriesFlat, category, products, product,
     brandMap, brandOf, brands, catalogue, looseKey,
+    banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
+    trackView, trackSearch, seoTraffic, seoCatalog, siteBase,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

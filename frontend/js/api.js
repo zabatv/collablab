@@ -222,7 +222,7 @@ const ProductAPI = {
   getBrands: () => ON_NODE ? NodeAPI.brands() : apiCall('/brands'),
 
   // The slides on the home page
-  getBanners: () => ON_NODE ? NodeAPI.nothing() : apiCall('/banners')
+  getBanners: () => ON_NODE ? NodeAPI.banners() : apiCall('/banners')
 };
 
 // Admin API
@@ -381,35 +381,36 @@ const AdminAPI = {
   // Списки пустые, а не с ошибкой: админка открывается и работает в той
   // части, которую их бэкенд умеет. Ошибку скажет попытка что-то записать.
   getBanners: () =>
-    ON_NODE ? NodeAPI.nothing() : apiCall('/admin/banners', { headers: authHeader() }),
+    ON_NODE ? NodeAPI.adminBanners()
+            : apiCall('/admin/banners', { headers: authHeader() }),
 
   createBanner: (file, fields = {}, onProgress) => {
-    if (ON_NODE) return NodeAPI.missing('Слайдера');
-
     const formData = new FormData();
     formData.append('image', file);
     Object.entries(fields).forEach(([name, value]) =>
       formData.append(name, value ?? ''));
 
-    return uploadWithProgress(`${API_BASE}/admin/banners`, formData, onProgress);
+    return uploadWithProgress(ON_NODE
+      ? `${NodeAPI.siteBase()}/admin/banners`
+      : `${API_BASE}/admin/banners`, formData, onProgress);
   },
 
   updateBanner: (id, data) => {
-    if (ON_NODE) return NodeAPI.missing('Слайдера');
+    if (ON_NODE) return NodeAPI.updateBanner(id, data);
 
     const headers = authHeader();
     return apiCall(`/admin/banners/${id}`, { method: 'PUT', headers, body: data });
   },
 
   deleteBanner: (id) => {
-    if (ON_NODE) return NodeAPI.missing('Слайдера');
+    if (ON_NODE) return NodeAPI.deleteBanner(id);
 
     const headers = authHeader();
     return apiCall(`/admin/banners/${id}`, { method: 'DELETE', headers });
   },
 
   reorderBanners: (ids) => {
-    if (ON_NODE) return NodeAPI.missing('Слайдера');
+    if (ON_NODE) return NodeAPI.reorderBanners(ids);
 
     const headers = authHeader();
     return apiCall('/admin/banners/order', { method: 'PUT', headers, body: { ids } });
@@ -434,11 +435,11 @@ const AdminAPI = {
             { headers: authHeader() }),
 
   seoCatalog: () =>
-    ON_NODE ? NodeAPI.missing('Раздела SEO')
+    ON_NODE ? NodeAPI.seoCatalog()
             : apiCall('/admin/seo/catalog', { headers: authHeader() }),
 
   seoTraffic: (days = 30) =>
-    ON_NODE ? NodeAPI.missing('Статистики посещений')
+    ON_NODE ? NodeAPI.seoTraffic(days)
             : apiCall(`/admin/seo/traffic?days=${days}`, { headers: authHeader() }),
 
   getBrands: () => {

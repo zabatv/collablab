@@ -1984,10 +1984,9 @@
     function adaptToBackend() {
       if (!ON_NODE) return;
 
-      // Бренды держит наш сервис, а не их бэкенд: раздел остаётся, если
-      // адрес сервиса задан в config.js
-      const gone = NodeAPI.conf().brands
-        ? ['banners', 'seo'] : ['banners', 'brands', 'seo'];
+      // Бренды, слайдер и SEO держит наш сервис, а не их бэкенд: эти
+      // разделы остаются, если адрес сервиса задан в config.js
+      const gone = NodeAPI.siteBase() ? [] : ['banners', 'brands', 'seo'];
 
       gone.forEach(tab => {
         const item = el(`.nav-item[data-tab="${tab}"]`);
