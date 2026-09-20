@@ -181,10 +181,114 @@ echo '0 3 * * * root sqlite3 /var/www/collablab/backend/data/products.db ".backu
 Фотографии и видео лежат в `frontend/uploads/` — их тоже стоит копировать
 (`rsync -a frontend/uploads/ /var/backups/shop/uploads/`).
 
-## Когда включим их бэкенд
+## Вариант с их бэкендом: сайт на VPS, каталог на Windows
 
-Каталог тогда переезжает на Node + PostgreSQL на Windows-машине с 1С, а VPS
-остаётся точкой входа: по их `docs/vps-reverse-proxy.md` это nginx плюс
-WireGuard-туннель. На стороне сайта меняется одна строка в
-`frontend/js/config.js` — `backend: 'node'` и адреса их серверов.
-Подробности в [node-backend.md](node-backend.md).
+Каталог живёт на Windows-компьютере рядом с 1С, у которого нет белого IP.
+VPS принимает HTTPS и передаёт запросы по WireGuard-туннелю:
+
+```
+браузер ─https─> nginx на VPS ─┬─ /         → frontend/ (страницы сайта)
+                               ├─ /api/     → 10.8.0.2:3000 через туннель
+                               └─ /api/media/ → то же, с кэшем на VPS
+```
+
+Их собственная инструкция отдаёт API прямо на корне домена. Нам корень нужен
+под страницы, поэтому API уходит на `/api/`, а слэш в конце `proxy_pass`
+срезает этот префикс: `/api/products` приходит к ним как `/products`.
+
+Адресация туннеля из их документации: VPS `10.8.0.1`, Windows `10.8.0.2`,
+UDP 51820. Порт 3000 на Windows открыт только для 10.8.0.1.
+
+### Конфиг nginx
+
+`/etc/nginx/conf.d/shop-cache.conf`:
+
+```nginx
+proxy_cache_path /var/cache/nginx/shop_media levels=1:2 keys_zone=shop_media:10m
+                 max_size=2g inactive=7d use_temp_path=off;
+```
+
+`/etc/nginx/sites-available/robots07.com`:
+
+```nginx
+# Каталог на Windows-компьютере, доступен только через WireGuard
+upstream shop_backend {
+    server 10.8.0.2:3000;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name robots07.com www.robots07.com;
+
+    root /var/www/collablab/frontend;
+    index index.html;
+
+    # Страницы сайта: /catalog открывает catalog.html
+    location / {
+        try_files $uri $uri.html $uri/ /index.html;
+    }
+
+    # Фото и видео: через туннель тянутся только первый раз
+    location /api/media/ {
+        proxy_pass http://shop_backend/media/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_cache shop_media;
+        proxy_cache_valid 200 1h;
+        proxy_cache_use_stale error timeout updating;
+        add_header X-Cache $upstream_cache_status;
+        expires 1d;
+    }
+
+    location /api/ {
+        proxy_pass http://shop_backend/;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+
+    # Компьютер выключен или туннель упал
+    error_page 502 503 504 /maintenance.html;
+    location = /maintenance.html {
+        root /var/www/shop;
+        internal;
+    }
+}
+```
+
+### Настройка сайта
+
+`frontend/js/config.js`:
+
+```js
+backend: 'node',
+node: {
+  public: 'https://robots07.com/api',
+  admin:  'http://127.0.0.1:3001',
+},
+```
+
+Сайт и API оказываются на одном домене, поэтому CORS витрине вообще не нужен:
+браузер считает такие запросы своими.
+
+### Админка
+
+Админский сервер слушает `127.0.0.1` и через туннель не проходит — так у них
+задумано. Поэтому страница админки работает **с самого Windows-компьютера**:
+открыть на нём `https://robots07.com/admin`, а запросы пойдут на
+`http://127.0.0.1:3001`. Браузер это разрешает, `127.0.0.1` для него
+доверенный адрес, а домен вписан в `ADMIN_ALLOWED_ORIGINS`.
+
+Ничего дополнительно открывать наружу не надо. Если понадобится править
+каталог не с той машины, это отдельный шаг: `ADMIN_HOST=10.8.0.2`, правило
+файрвола для порта 3001 с 10.8.0.1, свой `location` в nginx и обязательно
+длинный `ADMIN_PASSWORD` — админка окажется в интернете за одним лишь
+паролем, так что решать это стоит осознанно.

@@ -22,7 +22,7 @@ window.SHOP_CONFIG = {
 
   // Адреса их серверов. Публичный только на чтение, админский — на запись.
   node: {
-    public: 'http://127.0.0.1:3000',
+    public: 'https://robots07.com/api',
     admin: 'http://127.0.0.1:3001',
   },
 };
