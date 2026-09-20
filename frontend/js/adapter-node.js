@@ -66,6 +66,32 @@ const NodeAPI = (() => {
   // осталось оно.
   const siteBase = () => conf().site || conf().brands || '';
 
+  // Описания разделов: их бэкенд такого поля не знает, текст живёт у нас
+  async function categoryTexts() {
+    if (!siteBase()) return {};
+    try {
+      const data = await call(siteBase(), '/categories/text');
+      const byId = {};
+      (data.items || []).forEach(item => {
+        byId[item.category_id] = item.description;
+      });
+      return byId;
+    } catch (error) {
+      console.warn('Описания разделов недоступны:', error.message);
+      return {};
+    }
+  }
+
+  function saveCategoryText(categoryId, description) {
+    if (!siteBase()) throw new Error('Сервис сайта не настроен');
+    // call сам превращает тело в JSON — сюда идёт объект, не строка
+    return call(siteBase(), `/admin/categories/${categoryId}/text`, {
+      method: 'PUT',
+      headers: basicHeader(),
+      body: { description },
+    });
+  }
+
   // Слайды на главной
   async function banners() {
     if (!siteBase()) return [];
@@ -501,15 +527,23 @@ const NodeAPI = (() => {
   }
 
   async function categoryTree() {
-    const [data, map, items] = await Promise.all([
+    const [data, map, items, texts] = await Promise.all([
       readPublic('/categories'),
       brandMap(),
       catalogue().catch(() => []),
+      categoryTexts(),
     ]);
 
     const roots = buildTree(data.items || []);
     const facts = categoryFacts(items);
     roots.forEach(node => paintNode(node, facts, map.byId));
+
+    const describe = (nodes) => nodes.forEach(node => {
+      node.description = texts[node.id] || null;
+      describe(node.children);
+    });
+    describe(roots);
+
     return roots;
   }
 
@@ -622,8 +656,19 @@ const NodeAPI = (() => {
   // Дерево для админки берётся у админского сервера: там видны и скрытые
   // товары, и открыта она бывает, когда публичный сервер ещё не поднят
   async function adminCategoryTree() {
-    const data = await readAdmin('/categories');
-    return buildTree(data.items || []);
+    const [data, texts] = await Promise.all([
+      readAdmin('/categories'),
+      categoryTexts(),
+    ]);
+
+    const roots = buildTree(data.items || []);
+    const describe = (nodes) => nodes.forEach(node => {
+      node.description = texts[node.id] || '';
+      describe(node.children);
+    });
+    describe(roots);
+
+    return roots;
   }
 
   async function adminProducts(page = 1, perPage = 20) {
@@ -699,6 +744,7 @@ const NodeAPI = (() => {
     brandMap, brandOf, brands, catalogue, looseKey,
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
+    categoryTexts, saveCategoryText,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

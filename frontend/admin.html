@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261010">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
   <style>
     .admin-layout {
       display: grid;
@@ -1954,6 +1954,29 @@
     </div>
   </div>
 
+  <!-- Описание раздела: текст под заголовком на странице каталога -->
+  <div class="modal" id="cat-text-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeCategoryTextModal()">&times;</span>
+      <h2>ОПИСАНИЕ РАЗДЕЛА</h2>
+
+      <form id="cat-text-form" class="admin-form" style="margin-top: 24px;">
+        <div class="form-group">
+          <label id="cat-text-label">Категория</label>
+          <textarea id="cat-text-value" rows="7" maxlength="4000"
+                    placeholder="Для чего этот раздел, что в нём есть, чем отличаются исполнения."></textarea>
+          <small class="text-muted">
+            Текст встанет под заголовком на странице раздела. Его же читают
+            поисковики, поэтому лучше живыми словами, а не перечислением.
+            Пусто — блока не будет.
+          </small>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">СОХРАНИТЬ</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Add Brand Modal -->
   <div class="modal" id="brand-modal">
     <div class="modal-content">
@@ -2021,10 +2044,10 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20261010"></script>
-  <script src="js/adapter-node.js?v=20261010"></script>
-  <script src="js/api.js?v=20261010"></script>
-  <script src="js/main.js?v=20261010"></script>
+  <script src="js/config.js?v=20261011"></script>
+  <script src="js/adapter-node.js?v=20261011"></script>
+  <script src="js/api.js?v=20261011"></script>
+  <script src="js/main.js?v=20261011"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -2102,8 +2125,10 @@
       const categories = el('#categories-section');
       if (categories) {
         categories.insertAdjacentHTML('afterbegin',
-          '<div class="notice">Дерево категорий на этом бэкенде только для ' +
-          'чтения: эндпоинтов для их правки в API нет.</div>');
+          '<div class="notice">Само дерево на этом бэкенде только для чтения: ' +
+          'создавать, переименовывать и переносить категории через сайт нельзя — ' +
+          'таких эндпоинтов в их API нет. Кнопка «Описание» работает: текст ' +
+          'раздела хранит сайт, а не 1С.</div>');
       }
     }
 
@@ -3621,7 +3646,8 @@
       title.className = 'cat-admin-title';
       title.innerHTML = `
         <strong>${escapeHtml(category.name)}</strong>
-        <span class="text-muted">${categoryCounts(category)}</span>`;
+        <span class="text-muted">${categoryCounts(category)}${
+          category.description ? ' · с описанием' : ''}</span>`;
       row.appendChild(title);
 
       const actions = document.createElement('div');
@@ -3629,6 +3655,7 @@
       actions.append(
         iconButton(category),
         smallButton('+ Подкатегория', () => openAddCategoryModal(category.id)),
+        smallButton('Описание', () => openCategoryTextModal(category)),
         smallButton('Изменить', () => openEditCategoryModal(category)),
         smallButton('Удалить', () => removeCategory(category), 'danger'));
       row.appendChild(actions);
@@ -3949,6 +3976,39 @@
       el('#category-modal').classList.remove('active');
       editingCategoryId = null;
     }
+
+    /* Описание раздела правится отдельно от остального: на их бэкенде
+       название и место категории ведёт 1С и менять их через сайт нельзя,
+       а текст хранит наш сервис — значит, он редактируется всегда. */
+    let describingCategoryId = null;
+
+    function openCategoryTextModal(category) {
+      describingCategoryId = category.id;
+      el('#cat-text-label').textContent = category.name;
+      el('#cat-text-value').value = category.description || '';
+      el('#cat-text-modal').classList.add('active');
+      el('#cat-text-value').focus();
+    }
+
+    function closeCategoryTextModal() {
+      el('#cat-text-modal').classList.remove('active');
+      describingCategoryId = null;
+    }
+
+    el('#cat-text-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!describingCategoryId) return;
+
+      try {
+        await AdminAPI.setCategoryDescription(
+          describingCategoryId, el('#cat-text-value').value.trim());
+        showNotification('Описание сохранено');
+        closeCategoryTextModal();
+        loadCategories();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    });
 
     el('#category-form').addEventListener('submit', async (e) => {
       e.preventDefault();

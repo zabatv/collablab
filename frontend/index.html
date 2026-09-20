@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261010">
+  <link rel="stylesheet" href="css/style.css?v=20261011">
 </head>
 <body>
   <!-- Header -->
@@ -43,18 +43,6 @@
       </div>
     </div>
   </header>
-
-  <!-- Categories Bar -->
-  <nav class="category-bar">
-    <div class="container">
-      <div class="category-bar-row">
-        <div class="category-bar-list" id="category-bar">
-          <span class="category-bar-loading">Загрузка категорий...</span>
-        </div>
-        <div id="category-more"></div>
-      </div>
-    </div>
-  </nav>
 
   <!-- Slides: news, offers, a new product. Filled from the admin panel;
        with nothing in it the hero below takes its place. -->
@@ -93,7 +81,6 @@
   <div id="featured" class="container" style="padding-block: 48px;">
     <div class="sections-toolbar">
       <h2 class="sections-heading">Каталог по разделам</h2>
-      <button type="button" class="sections-toggle-all" id="toggle-all" hidden></button>
     </div>
     <div id="category-sections"></div>
   </div>
@@ -145,12 +132,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261010"></script>
-  <script src="js/adapter-node.js?v=20261010"></script>
-  <script src="js/api.js?v=20261010"></script>
-  <script src="js/main.js?v=20261010"></script>
-  <script src="js/effects.js?v=20261010"></script>
-  <script src="js/consent.js?v=20261010"></script>
+  <script src="js/config.js?v=20261011"></script>
+  <script src="js/adapter-node.js?v=20261011"></script>
+  <script src="js/api.js?v=20261011"></script>
+  <script src="js/main.js?v=20261011"></script>
+  <script src="js/effects.js?v=20261011"></script>
+  <script src="js/consent.js?v=20261011"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -165,7 +152,6 @@
         const tree = await ProductAPI.getCategories();
         const filled = tree.filter(section => section.total_count > 0);
 
-        renderCategoryBar(filled);
         renderHeroStats(tree);
 
         if (filled.length === 0) {
@@ -174,12 +160,7 @@
         }
 
         clear(sections);
-        sectionHandles.length = 0;
-
-        filled.forEach(section =>
-          renderSection(sections, section, sectionStartsOpen(section.id)));
-
-        wireToggleAll();
+        filled.forEach(section => renderSection(sections, section));
       } catch (error) {
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
@@ -304,168 +285,31 @@
       slideTimer = null;
     }
 
-    // How long the fold takes. Must match --unfold in the stylesheet.
-    const FOLD_MS = 340;
-
-    // Every section rendered on the page, so one button can drive them all
-    const sectionHandles = [];
-
-    /* ---------- what was left folded ----------
-       Only the ids of the sections put aside, and only in this browser.
-       Private mode and blocked site data both make it throw, and a
-       catalogue must open either way. */
-    const FOLD_KEY = 'folded-sections';   // что закрыли на большом экране
-    const OPEN_KEY = 'opened-sections';   // что открыли на телефоне
-
-    // На большом экране разделы стоят открытыми: каталог сразу показывает,
-    // что в нём есть, а полосы нужны, чтобы убрать лишнее. На телефоне
-    // наоборот — одиннадцать открытых разделов превращают главную в ленту
-    // на десяток экранов, и до нужного не долистать.
-    const onPhone = () => window.matchMedia('(max-width: 640px)').matches;
-
-    function storedSet(key) {
-      try {
-        const stored = JSON.parse(localStorage.getItem(key) || '[]');
-        return new Set(Array.isArray(stored) ? stored : []);
-      } catch (error) {
-        return new Set();
-      }
-    }
-
-    const foldedSections = () => storedSet(FOLD_KEY);
-
-    function sectionStartsOpen(id) {
-      return onPhone() ? storedSet(OPEN_KEY).has(id) : !storedSet(FOLD_KEY).has(id);
-    }
-
-    function rememberFold(id, open) {
-      // На телефоне запоминается открытое, на большом экране — закрытое:
-      // помнить стоит то, что расходится с обычным видом страницы
-      const key = onPhone() ? OPEN_KEY : FOLD_KEY;
-      const listed = storedSet(key);
-
-      (onPhone() ? open : !open) ? listed.add(id) : listed.delete(id);
-
-      try {
-        localStorage.setItem(key, JSON.stringify([...listed]));
-      } catch (error) {
-        // Remembering is a convenience; losing it changes nothing
-      }
-    }
-
-    // Opens or shuts a section, animating the height from the number it is
-    // now to the number it will be. CSS alone could do this by moving a grid
-    // row between 1fr and 0fr, but only in browsers from the last few years —
-    // in an older one the section would simply blink shut. A measured height
-    // animates everywhere.
-    function foldSection(head, body, inner, open) {
-      body.dataset.open = String(open);
-      head.setAttribute('aria-expanded', String(open));
-
-      const from = body.getBoundingClientRect().height;
-      const to = open ? inner.scrollHeight : 0;
-
-      body.style.height = `${from}px`;
-      void body.offsetHeight;          // let the browser take the starting value
-      body.style.height = `${to}px`;
-
-      clearTimeout(body.foldTimer);
-      body.foldTimer = setTimeout(() => {
-        // Open, the height goes back to auto: a photograph that arrives late,
-        // or a phone turned on its side, must not be cut off by a number
-        // measured before either happened
-        body.style.height = open ? 'auto' : '0px';
-      }, FOLD_MS);
-    }
-
-    // A shut bar says nothing about what is behind it, so it carries the
-    // first few names — enough to tell whether it is worth opening
-    function sectionHint(category) {
-      const names = (category.children || []).map(child => child.name);
-      if (names.length === 0) return '';
-
-      const shown = names.slice(0, 3).join(' · ');
-      return names.length > 3 ? `${shown} и ещё ${names.length - 3}` : shown;
-    }
-
-    /* ---------- one button for all of them ---------- */
-
-    function wireToggleAll() {
-      const button = el('#toggle-all');
-      if (!button || sectionHandles.length < 2) return;
-
-      button.hidden = false;
-      button.onclick = () => {
-        // Anything open means the button closes; only when everything is
-        // already shut does it open them again
-        const shouldOpen = !sectionHandles.some(section => section.isOpen());
-        sectionHandles.forEach(section => section.set(shouldOpen));
-        updateToggleAll();
-      };
-
-      updateToggleAll();
-    }
-
-    function updateToggleAll() {
-      const button = el('#toggle-all');
-      if (!button || button.hidden) return;
-
-      const anyOpen = sectionHandles.some(section => section.isOpen());
-      button.textContent = anyOpen ? 'Свернуть все' : 'Развернуть все';
-    }
-
-    // A section is a bar that folds. It stands open, showing the
-    // subcategories under it — names and photographs, not a wall of products.
-    function renderSection(container, category, open) {
+    // Раздел — заголовок и его подкатегории. Ничего не сворачивается:
+    // полоса со стрелкой убрана, каталог виден весь сразу.
+    function renderSection(container, category) {
       const section = document.createElement('section');
       section.className = 'section-block reveal';
 
-      const head = document.createElement('button');
-      head.type = 'button';
-      head.className = 'section-head-bar';
-      head.setAttribute('aria-expanded', String(open));
+      const head = document.createElement('div');
+      head.className = 'section-head-plain';
       head.innerHTML = `
-        <span class="section-chevron" aria-hidden="true"></span>
-        <span class="section-title">${escapeHtml(category.name)}</span>
-        <span class="section-hint">${escapeHtml(sectionHint(category))}</span>
+        <h3 class="section-title">
+          <a href="catalog.html?category=${category.id}">${escapeHtml(category.name)}</a>
+        </h3>
         <span class="section-count num">${category.total_count}</span>`;
 
       const body = document.createElement('div');
       body.className = 'section-body';
-      body.dataset.open = String(open);
-      // No animation for the state the page opens in
-      body.style.height = open ? 'auto' : '0px';
 
       const inner = document.createElement('div');
       inner.className = 'section-body-inner';
       body.appendChild(inner);
 
-      head.addEventListener('click', () => {
-        const nowOpen = body.dataset.open !== 'true';
-        // A section shut on the first visit still has nothing in it, and
-        // its height has to be known before the fold starts
-        if (nowOpen) fillSection(inner, category);
-        foldSection(head, body, inner, nowOpen);
-        rememberFold(category.id, nowOpen);
-        updateToggleAll();
-      });
-
-      // What the button at the top of the page drives
-      sectionHandles.push({
-        id: category.id,
-        isOpen: () => body.dataset.open === 'true',
-        set(shouldOpen) {
-          if (this.isOpen() === shouldOpen) return;
-          if (shouldOpen) fillSection(inner, category);
-          foldSection(head, body, inner, shouldOpen);
-          rememberFold(category.id, shouldOpen);
-        },
-      });
-
       section.append(head, body);
       container.appendChild(section);
 
-      if (open) fillSection(inner, category);
+      fillSection(inner, category);
     }
 
     // Filled the first time the section is opened, not before
@@ -583,76 +427,6 @@
           <span class="tile-name">${escapeHtml(category.name)}</span>
           <span class="tile-count num">${category.total_count}</span>
         </a>`;
-    }
-
-    const VISIBLE_CATEGORIES = 5;
-
-    function categoryLink(category, className = 'category-bar-item') {
-      const link = document.createElement('a');
-      link.className = className;
-      link.href = `catalog.html?category=${category.id}`;
-
-      const name = document.createElement('span');
-      name.textContent = category.name;
-      link.appendChild(name);
-
-      const count = document.createElement('span');
-      count.className = 'category-bar-count';
-      // The section's own products plus everything in its subcategories
-      count.textContent = category.total_count;
-      link.appendChild(count);
-
-      return link;
-    }
-
-    function renderCategoryBar(categories) {
-      const bar = el('#category-bar');
-      clear(bar);
-
-      const all = document.createElement('a');
-      all.className = 'category-bar-item category-bar-item-all';
-      all.href = 'catalog.html';
-      all.textContent = 'ВСЕ ТОВАРЫ';
-      bar.appendChild(all);
-
-      if (categories.length === 0) {
-        const hint = document.createElement('span');
-        hint.className = 'category-bar-loading';
-        hint.textContent = 'Категории появятся после добавления товаров';
-        bar.appendChild(hint);
-        return;
-      }
-
-      // Categories arrive sorted by size, so the bar keeps the biggest ones
-      categories.slice(0, VISIBLE_CATEGORIES).forEach(category => bar.appendChild(categoryLink(category)));
-
-      const moreHost = el('#category-more');
-      clear(moreHost);
-
-      const rest = categories.slice(VISIBLE_CATEGORIES);
-      if (rest.length === 0) return;
-
-      const more = document.createElement('div');
-      more.className = 'category-bar-more';
-
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'category-bar-item category-bar-toggle';
-      toggle.textContent = `ЕЩЁ (${rest.length})`;
-      toggle.onclick = (event) => {
-        event.stopPropagation();
-        more.classList.toggle('open');
-      };
-      more.appendChild(toggle);
-
-      const dropdown = document.createElement('div');
-      dropdown.className = 'category-bar-dropdown';
-      rest.forEach(category => dropdown.appendChild(categoryLink(category, 'category-bar-dropdown-item')));
-      more.appendChild(dropdown);
-
-      // Outside the scrolling list, or the dropdown would be clipped by it
-      moreHost.appendChild(more);
-      document.addEventListener('click', () => more.classList.remove('open'));
     }
 
     // Searching opens the catalogue with the results, the same as from any other page

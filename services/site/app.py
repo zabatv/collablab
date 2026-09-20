@@ -140,6 +140,24 @@ class Banner(db.Model):
         }
 
 
+# Описание раздела. В их таблице categories такого поля нет, а 1С его не
+# выгружает, поэтому текст живёт здесь и правится из админки. Ключ — их
+# id категории: он не меняется, категории заведены вручную.
+
+class CategoryText(db.Model):
+    __tablename__ = 'category_texts'
+
+    category_id = db.Column(db.Integer, primary_key=True)
+    description = db.Column(db.Text, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'category_id': self.category_id,
+            'description': self.description or '',
+        }
+
+
 # Посещаемость считается обезличенно: сколько раз открыли товар и что
 # искали. Ни адреса, ни идентификатора посетителя здесь нет.
 
@@ -226,6 +244,39 @@ def brand_map():
         'articles': {loose(rule.value): rule.brand_id
                      for rule in rules if rule.kind == 'article'},
     })
+
+
+@app.route('/categories/text')
+def category_texts():
+    """Описания всех разделов разом.
+
+    Витрина рисует дерево одним куском, так что и тексты просит одним
+    запросом — их немного, отдельный запрос на категорию не нужен."""
+    rows = CategoryText.query.filter(CategoryText.description != '').all()
+    return jsonify({'items': [row.to_dict() for row in rows]})
+
+
+@app.route('/admin/categories/<int:category_id>/text', methods=['PUT'])
+@require_admin
+def set_category_text(category_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидался JSON с полем description'}), 400
+
+    text = str(data.get('description') or '').strip()
+
+    if len(text) > 4000:
+        return jsonify({'error': 'Описание длиннее 4000 символов'}), 400
+
+    row = db.session.get(CategoryText, category_id)
+    if not row:
+        row = CategoryText(category_id=category_id)
+        db.session.add(row)
+
+    row.description = text
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
 
 
 @app.route('/logos/<path:name>')

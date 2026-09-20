@@ -355,6 +355,19 @@ const AdminAPI = {
     });
   },
 
+  // Текст под заголовком раздела. У их бэкенда такого поля нет, поэтому
+  // на нём описание хранит наш сервис, а на нашем — сама категория.
+  setCategoryDescription: (id, description) => {
+    if (ON_NODE) return NodeAPI.saveCategoryText(id, description);
+
+    const headers = authHeader();
+    return apiCall(`/admin/categories/${id}`, {
+      method: 'PUT',
+      headers,
+      body: { description }
+    });
+  },
+
   // The picture on a category's tile, instead of one borrowed from a product
   uploadCategoryIcon: (id, file, onProgress) => {
     if (ON_NODE) return NodeAPI.missing('Картинок категорий');

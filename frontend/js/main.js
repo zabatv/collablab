@@ -95,6 +95,42 @@ function createProductCard(product) {
   `;
 }
 
+/* Список таблицей: наименование из 1С, остаток и цена. Так выбирают, когда
+   уже знают, что нужно, и сравнивают десяток похожих позиций по числам, а
+   не по фотографии. Кнопки «Купить» нет: заказывают звонком. */
+function productTable(products) {
+  const rows = products.map(product => {
+    const stock = stockLabel(product);
+    // Ноль в столбце «Кол-во» читается как «кончилось», а деталь возят
+    // под заказ — так и написано
+    const quantity = product.in_stock ? `${product.stock} шт.` : 'под заказ';
+
+    return `
+      <tr>
+        <td class="ptable-name">
+          <a href="product.html?id=${product.id}">${escapeHtml(product.name)}</a>
+          ${product.sku ? `<span class="ptable-sku">${escapeHtml(product.sku)}</span>` : ''}
+        </td>
+        <td class="ptable-stock num">
+          <span class="stock ${stock.className}">${quantity}</span>
+        </td>
+        <td class="ptable-price num">${formatPrice(product.price)}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table class="ptable">
+      <thead>
+        <tr>
+          <th>Наименование</th>
+          <th class="ptable-stock">Кол-во</th>
+          <th class="ptable-price">Цена</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
 // Placeholders hold the grid's shape while the request is in flight
 function renderSkeletons(container, count = 8) {
   if (!container) return;
