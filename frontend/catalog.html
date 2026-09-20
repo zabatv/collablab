@@ -10,7 +10,7 @@
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261005">
+  <link rel="stylesheet" href="css/style.css?v=20261006">
 </head>
 <body>
   <!-- Header -->
@@ -158,10 +158,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20261005"></script>
-  <script src="js/main.js?v=20261005"></script>
-  <script src="js/effects.js?v=20261005"></script>
-  <script src="js/consent.js?v=20261005"></script>
+  <script src="js/api.js?v=20261006"></script>
+  <script src="js/main.js?v=20261006"></script>
+  <script src="js/effects.js?v=20261006"></script>
+  <script src="js/consent.js?v=20261006"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -170,8 +170,16 @@
     let categoryTree = [];
     let openCategory = null;   // the category from ?category=, with path and children
 
+    // The brand whose mark was clicked, when the address carries one
+    let openBrand = null;
+
     function currentCategoryId() {
       const value = new URLSearchParams(window.location.search).get('category');
+      return value ? Number(value) : null;
+    }
+
+    function currentBrandId() {
+      const value = new URLSearchParams(window.location.search).get('brand');
       return value ? Number(value) : null;
     }
 
@@ -192,14 +200,22 @@
         clear(brandsFilter);
         el('#brands-group').style.display = brands.length ? '' : 'none';
 
+        // A brand may arrive in the address: clicking its mark anywhere on
+        // the site lands here with everything it makes already selected
+        const wanted = currentBrandId();
+        openBrand = brands.find(brand => brand.id === wanted) || null;
+
         brands.forEach(brand => {
           brandsFilter.innerHTML += `
             <div class="filter-option">
-              <input type="checkbox" id="brand-${brand.id}" value="${brand.id}" onchange="applyFilters()">
+              <input type="checkbox" id="brand-${brand.id}" value="${brand.id}"
+                     ${brand.id === wanted ? 'checked' : ''} onchange="applyFilters()">
               <label for="brand-${brand.id}">${escapeHtml(brand.name)}</label>
             </div>
           `;
         });
+
+        if (openBrand) renderHeading();
       } catch (error) {
         console.error('Error loading filters:', error);
       }
@@ -287,6 +303,11 @@
         (openCategory?.path || []).map(node => ({
           name: node.name, href: `catalog.html?category=${node.id}` })));
 
+      // A brand on its own is where the trail ends
+      if (!openCategory && openBrand) {
+        trail.push({ name: openBrand.name, href: `catalog.html?brand=${openBrand.id}` });
+      }
+
       trail.forEach((step, index) => {
         const last = index === trail.length - 1;
         const item = document.createElement(last ? 'span' : 'a');
@@ -303,9 +324,11 @@
         }
       });
 
-      title.textContent = openCategory ? openCategory.name : 'Каталог';
-      document.title = openCategory
-        ? `${openCategory.name} — каталог ROBOT`
+      // Arriving from a brand's mark, the brand is what the page is about
+      const heading = openCategory?.name || (openBrand ? openBrand.name : 'Каталог');
+      title.textContent = heading;
+      document.title = (openCategory || openBrand)
+        ? `${heading} — каталог ROBOT`
         : 'Каталог пневматики и автоматики — ROBOT';
 
       lead.textContent = openCategory?.description || '';
@@ -437,6 +460,11 @@
       if (openCategory) {
         parts.push((openCategory.path || []).map(node => node.name).join(' → '));
       }
+
+      // Whatever is ticked now, not only what the address arrived with
+      elAll('#brands-filter input:checked').forEach(input => {
+        parts.push(`бренд ${input.nextElementSibling.textContent.trim()}`);
+      });
 
       el('#active-filter').textContent = parts.length ? parts.join(' · ') : '';
     }

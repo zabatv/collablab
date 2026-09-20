@@ -8,7 +8,7 @@
   <title>Товар — ROBOT</title>
   <meta name="description" content="Характеристики, фотографии и цена позиции в каталоге ROBOT.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261005">
+  <link rel="stylesheet" href="css/style.css?v=20261006">
 </head>
 <body>
   <!-- Header -->
@@ -115,10 +115,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20261005"></script>
-  <script src="js/main.js?v=20261005"></script>
-  <script src="js/effects.js?v=20261005"></script>
-  <script src="js/consent.js?v=20261005"></script>
+  <script src="js/api.js?v=20261006"></script>
+  <script src="js/main.js?v=20261006"></script>
+  <script src="js/effects.js?v=20261006"></script>
+  <script src="js/consent.js?v=20261006"></script>
   <script>
     let currentProduct = null;
     let selectedImageIndex = 0;
@@ -242,10 +242,13 @@
                 <div class="product-meta-item">
                   <div class="product-meta-label">Бренд</div>
                   <div class="product-meta-value">
-                    ${product.brand.logo ? `
-                      <img class="brand-mark" src="${escapeHtml(product.brand.logo)}"
-                           alt="${escapeHtml(product.brand.name)}">` : ''}
-                    ${escapeHtml(product.brand.name)}
+                    <a class="brand-link" href="catalog.html?brand=${product.brand.id}"
+                       title="Все товары ${escapeHtml(product.brand.name)}">
+                      ${product.brand.logo ? `
+                        <img class="brand-mark" src="${escapeHtml(product.brand.logo)}"
+                             alt="${escapeHtml(product.brand.name)}">` : ''}
+                      ${escapeHtml(product.brand.name)}
+                    </a>
                   </div>
                 </div>` : ''}
               <div class="product-meta-item">

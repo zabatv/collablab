@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261005">
+  <link rel="stylesheet" href="css/style.css?v=20261006">
 </head>
 <body>
   <!-- Header -->
@@ -145,10 +145,10 @@
     </div>
   </footer>
 
-  <script src="js/api.js?v=20261005"></script>
-  <script src="js/main.js?v=20261005"></script>
-  <script src="js/effects.js?v=20261005"></script>
-  <script src="js/consent.js?v=20261005"></script>
+  <script src="js/api.js?v=20261006"></script>
+  <script src="js/main.js?v=20261006"></script>
+  <script src="js/effects.js?v=20261006"></script>
+  <script src="js/consent.js?v=20261006"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -530,12 +530,21 @@
     }
 
     function sectionRow(brand, items, offset) {
-      const mark = brand?.logo ? `
-        <div class="section-mark">
-          <img src="${escapeHtml(brand.logo)}" alt="${escapeHtml(brand.name)}" loading="lazy">
-        </div>`
-        : brand?.name ? `<div class="section-mark section-mark-text">${escapeHtml(brand.name)}</div>`
-        : '<div class="section-mark"></div>';
+      // The mark is a link when it stands for a real brand: clicking it
+      // shows everything that brand makes. A section's own icon is not a
+      // brand and leads nowhere.
+      const inside = brand?.logo
+        ? `<img src="${escapeHtml(brand.logo)}" alt="${escapeHtml(brand.name)}" loading="lazy">`
+        : brand?.name ? escapeHtml(brand.name) : '';
+
+      const classes = 'section-mark'
+        + (brand?.logo ? '' : brand?.name ? ' section-mark-text' : '')
+        + (brand?.id ? ' section-mark-link' : '');
+
+      const mark = brand?.id
+        ? `<a class="${classes}" href="catalog.html?brand=${brand.id}"
+              title="Все товары ${escapeHtml(brand.name)}">${inside}</a>`
+        : `<div class="${classes}">${inside}</div>`;
 
       return `
         <div class="section-row">

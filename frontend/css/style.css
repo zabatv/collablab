@@ -912,8 +912,11 @@ header {
   box-shadow: var(--shadow-sm);
 }
 
+/* The slides sit in one row and the track is as tall as the tallest of
+   them, so switching slides never makes the page jump */
 .slides {
   display: flex;
+  align-items: center;
   transition: transform 520ms var(--ease-out);
 }
 
@@ -925,10 +928,16 @@ header {
   text-decoration: none;
 }
 
+/* The picture keeps its own proportions and the band takes the height that
+   follows. A fixed band cropped whatever did not fit it: a wide, short
+   banner — the usual shape for one — lost its top and bottom to a strip
+   340 pixels tall. The cap is only there so a portrait image cannot take
+   over the screen. */
 .slide img {
   width: 100%;
-  height: clamp(180px, 26vw, 340px);
-  object-fit: cover;
+  height: auto;
+  max-height: 60vh;
+  object-fit: contain;
   display: block;
 }
 
@@ -1334,6 +1343,20 @@ header {
   mix-blend-mode: multiply;
   opacity: 0.85;
   pointer-events: none;
+}
+
+/* Clicking a brand shows everything it makes */
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.section-mark-link {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity var(--quick) ease;
 }
 
 .brand-mark {
@@ -2400,6 +2423,14 @@ footer {
 
   .section-head-bar:hover .section-chevron {
     background: rgba(255, 255, 255, 0.2);
+  }
+
+  .section-mark-link:hover {
+    opacity: 0.6;
+  }
+
+  .brand-link:hover {
+    color: var(--accent-ink);
   }
 
   .sections-toggle-all:hover {
