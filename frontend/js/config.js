@@ -13,7 +13,7 @@
  * на той стороне не появятся эндпоинты.
  */
 window.SHOP_CONFIG = {
-  backend: 'flask',
+  backend: 'node',
 
   // Адрес нашего API. Пусто — тот же домен, что и сайт: nginx проксирует
   // /api на Flask (см. docs/deploy-robots07.md). Заполнять только если
