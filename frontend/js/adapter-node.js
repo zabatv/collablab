@@ -214,9 +214,72 @@ const NodeAPI = (() => {
     return null;
   }
 
+  /* ---------- картинки категорий ---------- */
+
+  // Картинки у категории в их API нет, а плитки на главной без неё пустые.
+  // Поэтому фотография берётся взаймы у товара, как это делал наш бэкенд.
+  // Ради этого список товаров прочитывается целиком — по сотне за раз,
+  // первая страница последовательно, остальные разом — и раскладывается
+  // по категориям. На сессию результат запоминается.
+  const PREVIEW_KEY = 'category_previews';
+  let previews = null;
+
+  function rememberPreviews(found) {
+    previews = found;
+    try {
+      sessionStorage.setItem(PREVIEW_KEY, JSON.stringify(found));
+    } catch (error) {
+      // приватное окно или запрет на хранилище: обойдёмся памятью
+    }
+    return found;
+  }
+
+  function collectPhotos(items, into) {
+    items.forEach(item => {
+      const id = item.category?.id;
+      if (id && item.photo && !into[id]) into[id] = withBase(item.photo);
+    });
+    return into;
+  }
+
+  async function categoryPreviews() {
+    if (previews) return previews;
+    try {
+      const stored = sessionStorage.getItem(PREVIEW_KEY);
+      if (stored) return (previews = JSON.parse(stored));
+    } catch (error) {
+      // хранилище недоступно, читаем как в первый раз
+    }
+
+    const first = await readPublic('/products?limit=100&page=1');
+    const found = collectPhotos(first.items || [], {});
+
+    const rest = [];
+    for (let page = 2; page <= Math.min(first.pages || 1, 20); page++) {
+      rest.push(readPublic(`/products?limit=100&page=${page}`));
+    }
+    (await Promise.all(rest)).forEach(data => collectPhotos(data.items || [], found));
+
+    return rememberPreviews(found);
+  }
+
+  // Своё фото, а если товары лежат глубже — первое найденное в ветке
+  function paintPreviews(nodes, found) {
+    nodes.forEach(node => {
+      paintPreviews(node.children, found);
+      node.image = found[node.id]
+        || node.children.map(child => child.image).find(Boolean)
+        || null;
+    });
+    return nodes;
+  }
+
   async function categoryTree() {
-    const data = await readPublic('/categories');
-    return buildTree(data.items || []);
+    const [data, found] = await Promise.all([
+      readPublic('/categories'),
+      categoryPreviews().catch(() => ({})),
+    ]);
+    return paintPreviews(buildTree(data.items || []), found);
   }
 
   // Ветка нужна дереву, но не тому, кто спрашивал про одну категорию
