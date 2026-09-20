@@ -60,6 +60,14 @@ function splitName(name) {
   return { title: text.slice(0, cut), specs: text.slice(cut + 1).trim() };
 }
 
+// Размер файла человеческими словами: 2,4 МБ понятнее, чем 2516582
+function fileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} КБ`;
+  return `${(size / 1024 / 1024).toFixed(1).replace('.', ',')} МБ`;
+}
+
 function stockLabel(product) {
   return product.in_stock
     ? { className: 'in-stock', text: `В наличии: ${product.stock}` }

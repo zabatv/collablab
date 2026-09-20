@@ -361,6 +361,23 @@ const AdminAPI = {
   getLastChange: () => ON_NODE ? NodeAPI.lastChange() : Promise.resolve(null),
   get1cLinked: () => ON_NODE ? NodeAPI.linkedTo1c() : Promise.resolve(null),
 
+  /* Документация к товару: паспорт, чертёж, каталог производителя.
+     Их медиа принимает только картинки и видео — файлы лежат в нашем
+     сервисе, по артикулу. */
+  getDocuments: (article) => ON_NODE ? NodeAPI.productDocs(article) : Promise.resolve([]),
+
+  uploadDocument: (article, file, title) =>
+    ON_NODE ? NodeAPI.uploadProductDoc(article, file, title)
+            : NodeAPI.missing('Документации к товару'),
+
+  renameDocument: (id, title) =>
+    ON_NODE ? NodeAPI.renameProductDoc(id, title)
+            : NodeAPI.missing('Документации к товару'),
+
+  deleteDocument: (id) =>
+    ON_NODE ? NodeAPI.deleteProductDoc(id)
+            : NodeAPI.missing('Документации к товару'),
+
   /* Характеристики товара. На их бэкенде полей под них нет — таблицу
      хранит наш сервис по артикулу, а в теле товара они просто игнорируются.
      Пустой список возвращает позицию к разбору наименования из 1С. */

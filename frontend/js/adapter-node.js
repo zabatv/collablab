@@ -703,6 +703,52 @@ const NodeAPI = (() => {
     });
   }
 
+  /* ---------- документация ---------- */
+
+  /* Паспорт, чертёж, каталог производителя. Их медиа принимает только
+     картинки и видео, PDF оно отклоняет, — поэтому файлы держит наш
+     сервис, снова по артикулу. */
+  async function productDocs(article) {
+    if (!siteBase() || !article) return [];
+    try {
+      const data = await call(siteBase(), `/docs/${encodeURIComponent(article)}`);
+      return (data.items || []).map(item => ({
+        ...item,
+        url: `${siteBase()}${item.url}`,
+      }));
+    } catch (error) {
+      console.warn('Документация недоступна:', error.message);
+      return [];
+    }
+  }
+
+  async function uploadProductDoc(article, file, title = '') {
+    if (!siteBase()) throw new Error('Сервис сайта не настроен');
+
+    const form = new FormData();
+    form.append('file', file);
+    if (title) form.append('title', title);
+
+    // FormData отправляется сам: call() кладёт JSON, а здесь нужен multipart
+    const response = await fetch(
+      `${siteBase()}/admin/docs/${encodeURIComponent(article)}`,
+      { method: 'POST', headers: basicHeader(), body: form });
+
+    const details = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(details?.error || `Сервер ответил ошибкой ${response.status}`);
+    }
+    return details;
+  }
+
+  const renameProductDoc = (docId, title) =>
+    call(siteBase(), `/admin/docs/${docId}`,
+         { method: 'PUT', headers: basicHeader(), body: { title } });
+
+  const deleteProductDoc = (docId) =>
+    call(siteBase(), `/admin/docs/${docId}`,
+         { method: 'DELETE', headers: basicHeader() });
+
   async function product(id) {
     const [, item] = await Promise.all([
       brandMap(),
@@ -710,10 +756,16 @@ const NodeAPI = (() => {
     ]);
 
     const adapted = adaptProduct(item);
+    if (!adapted) return adapted;
+
+    const [stored, docs] = await Promise.all([
+      productSpecs(adapted.sku),
+      productDocs(adapted.sku),
+    ]);
 
     // Вписанное руками важнее разобранного из наименования
-    const stored = await productSpecs(adapted?.sku);
     if (stored.length) adapted.specifications = stored;
+    adapted.documents = docs;
 
     return adapted;
   }
@@ -899,6 +951,7 @@ const NodeAPI = (() => {
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
     categoryTexts, saveCategoryText, productSpecs, saveProductSpecs,
     lastChange, linkedTo1c,
+    productDocs, uploadProductDoc, renameProductDoc, deleteProductDoc,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
     adminCategoryTree, adminProducts, createProduct, updateProduct, deleteMedia,

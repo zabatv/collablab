@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="light">
   <title>Админ панель - ROBOT</title>
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261016">
+  <link rel="stylesheet" href="css/style.css?v=20261017">
   <style>
     .admin-layout {
       display: grid;
@@ -1891,7 +1891,9 @@
         <div class="upload-drop" id="image-drop">
           <input type="file" id="product-image-input" accept="image/*" multiple hidden>
           <div class="upload-drop-title">Перетащите фото сюда</div>
-          <div class="upload-drop-hint">или нажмите, чтобы выбрать на компьютере — JPG, PNG, WEBP, GIF</div>
+          <div class="upload-drop-hint">
+            или нажмите, чтобы выбрать на компьютере — JPG, PNG, WEBP, до 10 файлов за раз
+          </div>
         </div>
         <div class="upload-url-row">
           <input type="text" id="product-image-url" placeholder="Или вставьте ссылку на изображение">
@@ -1915,6 +1917,19 @@
           <input type="text" id="product-video-title" placeholder="Название видео (необязательно)">
         </div>
         <div id="product-videos-list" style="margin-top: 12px;"></div>
+      </div>
+
+      <div id="product-docs" style="margin-top: 24px;">
+        <h4>ДОКУМЕНТАЦИЯ</h4>
+        <div class="upload-drop" id="doc-drop">
+          <input type="file" id="product-doc-input"
+                 accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.dwg,.dxf,.zip,.rar,.7z" multiple hidden>
+          <div class="upload-drop-title">Перетащите паспорта и чертежи сюда</div>
+          <div class="upload-drop-hint">
+            или нажмите, чтобы выбрать — PDF, Word, Excel, DWG, DXF, архивы
+          </div>
+        </div>
+        <div id="product-docs-list" style="margin-top: 12px;"></div>
       </div>
     </div>
   </div>
@@ -2054,10 +2069,10 @@
     </div>
   </div>
 
-  <script src="js/config.js?v=20261016"></script>
-  <script src="js/adapter-node.js?v=20261016"></script>
-  <script src="js/api.js?v=20261016"></script>
-  <script src="js/main.js?v=20261016"></script>
+  <script src="js/config.js?v=20261017"></script>
+  <script src="js/adapter-node.js?v=20261017"></script>
+  <script src="js/api.js?v=20261017"></script>
+  <script src="js/main.js?v=20261017"></script>
   <script>
     let currentProductId = null;
     let currentProductsPage = 1;
@@ -3100,6 +3115,7 @@
       renderSpecRows([]);
       resetPendingMedia();
       renderMedia(null);
+      loadDocs();
       el('#product-modal').classList.add('active');
     }
 
@@ -3179,6 +3195,7 @@
         el('#product-active').checked = true;
 
         renderMedia(product);
+        loadDocs();
 
         el('#product-modal').classList.add('active');
       } catch (error) {
@@ -3198,6 +3215,124 @@
     function renderMedia(product) {
       renderImageList(product ? product.images : []);
       renderVideoList(product ? product.videos : []);
+    }
+
+    /* ===== документация =====
+
+       Их медиа принимает только картинки и видео: PDF оно отклонит. Файлы
+       держит наш сервис и хранит их по артикулу, а не по id товара, —
+       поэтому прикреплять их можно только к уже сохранённой позиции, у
+       которой артикул окончательный. */
+
+    let docList = [];
+
+    async function loadDocs() {
+      const host = el('#product-docs-list');
+      const zone = el('#doc-drop');
+      if (!host) return;
+
+      if (!currentProductId) {
+        docList = [];
+        if (zone) zone.classList.add('upload-drop-locked');
+        host.innerHTML = '<p class="text-muted">Сначала сохраните товар — ' +
+          'документы привязываются к артикулу.</p>';
+        return;
+      }
+
+      if (zone) zone.classList.remove('upload-drop-locked');
+      host.innerHTML = '<p class="text-muted">Загружаю…</p>';
+
+      try {
+        docList = await AdminAPI.getDocuments(el('#product-sku').value.trim());
+        renderDocList();
+      } catch (error) {
+        host.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    function renderDocList() {
+      const host = el('#product-docs-list');
+      clear(host);
+
+      if (!docList.length) {
+        host.innerHTML = '<p class="text-muted">Документов нет</p>';
+        return;
+      }
+
+      docList.forEach(doc => {
+        const row = document.createElement('div');
+        row.className = 'doc-row';
+
+        const kind = document.createElement('span');
+        kind.className = 'doc-kind';
+        kind.textContent = doc.kind || 'файл';
+
+        const link = document.createElement('a');
+        link.className = 'doc-row-title';
+        link.href = doc.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = doc.title;
+
+        const size = document.createElement('span');
+        size.className = 'doc-size num';
+        size.textContent = fileSize(doc.size);
+
+        const rename = smallButton('Переименовать', () => renameDoc(doc));
+        const remove = smallButton('Удалить', () => removeDoc(doc), 'danger');
+
+        row.append(kind, link, size, rename, remove);
+        host.appendChild(row);
+      });
+    }
+
+    async function addDocFiles(files) {
+      if (!currentProductId) {
+        showNotification('Сначала сохраните товар', 'error');
+        return;
+      }
+
+      const article = el('#product-sku').value.trim();
+      if (!article) {
+        showNotification('У товара нет артикула', 'error');
+        return;
+      }
+
+      for (const file of [...files]) {
+        try {
+          await AdminAPI.uploadDocument(article, file, '');
+        } catch (error) {
+          // Один отказ не должен обрывать остальные файлы
+          showNotification(`${file.name}: ${failureText(error)}`, 'error');
+        }
+      }
+
+      showNotification('Документы загружены');
+      loadDocs();
+    }
+
+    async function renameDoc(doc) {
+      const title = prompt('Название документа', doc.title);
+      if (title === null) return;
+
+      try {
+        await AdminAPI.renameDocument(doc.id, title.trim());
+        loadDocs();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    async function removeDoc(doc) {
+      if (!confirm(`Удалить «${doc.title}»?`)) return;
+
+      try {
+        await AdminAPI.deleteDocument(doc.id);
+        showNotification('Документ удалён');
+        loadDocs();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
     }
 
     function renderImageList(saved) {
@@ -3588,6 +3723,7 @@
 
     setupDropzone('#image-drop', '#product-image-input', addImageFiles);
     setupDropzone('#video-drop', '#product-video-input', addVideoFiles);
+    setupDropzone('#doc-drop', '#product-doc-input', addDocFiles);
 
     async function deleteVideo(videoId) {
       if (!confirm('Удалить это видео?')) return;

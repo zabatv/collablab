@@ -2167,6 +2167,110 @@ td.ptable-price {
   font-weight: 500;
 }
 
+/* ---------- документация ---------- */
+
+.documents {
+  margin-bottom: var(--space-2xl);
+}
+
+.documents h3 {
+  font-size: var(--text-md);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-xs);
+  border-bottom: 1px solid var(--line);
+}
+
+.doc-list {
+  list-style: none;
+  max-width: 720px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 11px var(--space-xs);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  transition: background-color var(--quick) ease;
+}
+
+.doc-list li:last-child .doc-item {
+  border-bottom: 0;
+}
+
+/* Расширение отдельной меткой: по ней сразу видно, откроется файл в
+   браузере или скачается */
+.doc-kind {
+  flex: none;
+  min-width: 46px;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.doc-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 620;
+  font-size: var(--text-sm);
+}
+
+.doc-size {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .doc-item:hover {
+    background: var(--surface-sunken);
+  }
+
+  .doc-item:hover .doc-title {
+    color: var(--accent);
+  }
+}
+
+/* Документ в админке: тип, название, размер и две кнопки */
+.doc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.doc-row:last-child {
+  border-bottom: 0;
+}
+
+.doc-row-title {
+  flex: 1;
+  min-width: 140px;
+  font-size: var(--text-sm);
+  font-weight: 620;
+  color: var(--ink);
+}
+
+.doc-row-title:hover {
+  color: var(--accent);
+}
+
+/* Пока товар не сохранён, прикреплять документы не к чему */
+.upload-drop-locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
 /* ===== VIDEO ===== */
 #product-videos-section:not(:empty) {
   margin-bottom: var(--space-2xl);

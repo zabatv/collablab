@@ -44,20 +44,43 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, 'data')
 LOGO_DIR = os.path.join(DATA_DIR, 'logos')
 SLIDE_DIR = os.path.join(DATA_DIR, 'banners')
+DOC_DIR = os.path.join(DATA_DIR, 'docs')
 os.makedirs(LOGO_DIR, exist_ok=True)
 os.makedirs(SLIDE_DIR, exist_ok=True)
+os.makedirs(DOC_DIR, exist_ok=True)
 
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DATA_DIR}/brands.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # картинки и выгрузки 1С
+app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # картинки, паспорта, выгрузки 1С
 
 db = SQLAlchemy(app)
 
 ADMIN_USER = os.getenv('ADMIN_USER', '')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', '')
 LOGO_TYPES = {'.png', '.jpg', '.jpeg', '.webp', '.svg'}
+
+# Паспорта, чертежи и каталоги. Список закрытый: этот сервис отдаёт файлы
+# с того же домена, что и сайт, поэтому .html или .svg среди них означали
+# бы чужой скрипт на robots07.com.
+DOC_TYPES = {
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls': 'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.csv': 'text/csv',
+    '.txt': 'text/plain',
+    '.dwg': 'image/vnd.dwg',
+    '.dxf': 'image/vnd.dxf',
+    '.zip': 'application/zip',
+    '.rar': 'application/vnd.rar',
+    '.7z': 'application/x-7z-compressed',
+}
+
+# Больше десятка паспортов на одну позицию — это уже не карточка товара
+MAX_DOCS = 12
 NAME_LIMIT = 60
 
 # Откуда брать товары для разбора каталога. Внутри туннеля, без пароля.
@@ -177,6 +200,34 @@ class ProductSpec(db.Model):
         except ValueError:
             rows = []
         return {'article': self.shown_article or self.article, 'rows': rows}
+
+
+# Документация к товару: паспорт, чертёж, каталог производителя. Их медиа
+# принимает только картинки и видео — PDF оно отклонит, — поэтому файлы
+# лежат здесь. Ключ снова артикул: он переживает перевыгрузку из 1С.
+
+class ProductDoc(db.Model):
+    __tablename__ = 'product_docs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    article = db.Column(db.String(120), nullable=False, index=True)  # loose()
+    shown_article = db.Column(db.String(120), default='')
+    title = db.Column(db.String(200), nullable=False)
+    stored = db.Column(db.String(255), nullable=False)   # имя файла на диске
+    suffix = db.Column(db.String(10), default='')
+    size = db.Column(db.Integer, default=0)
+    sort_order = db.Column(db.Integer, default=0, index=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'title': self.title,
+            'url': f'/files/docs/{self.stored}',
+            'kind': (self.suffix or '').lstrip('.').upper(),
+            'size': self.size or 0,
+            'sort_order': self.sort_order or 0,
+        }
 
 
 # Посещаемость считается обезличенно: сколько раз открыли товар и что
@@ -358,6 +409,106 @@ def set_product_specs(article):
     row.shown_article = article[:120]
     row.rows = json.dumps(rows, ensure_ascii=False)
     row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
+
+
+@app.route('/docs/<path:article>')
+def product_docs(article):
+    """Паспорта и чертежи позиции. Пусто — блока на странице не будет."""
+    rows = (ProductDoc.query
+            .filter_by(article=loose(article))
+            .order_by(ProductDoc.sort_order, ProductDoc.id)
+            .all())
+    return jsonify({'article': article, 'items': [row.to_dict() for row in rows]})
+
+
+@app.route('/files/docs/<path:name>')
+def doc_file(name):
+    """Файл документа.
+
+    PDF открывается в браузере, остальное скачивается: показывать .docx
+    или .csv страницей незачем, а отдавать их inline — лишний повод для
+    браузера угадывать тип."""
+    safe = secure_filename(name)
+    suffix = os.path.splitext(safe)[1].lower()
+
+    answer = send_from_directory(
+        DOC_DIR, safe,
+        mimetype=DOC_TYPES.get(suffix, 'application/octet-stream'),
+        as_attachment=(suffix != '.pdf'))
+    answer.headers['X-Content-Type-Options'] = 'nosniff'
+    return answer
+
+
+@app.route('/admin/docs/<path:article>', methods=['POST'])
+@require_admin
+def upload_doc(article):
+    key = loose(article)
+    if not key:
+        return jsonify({'error': 'Пустой артикул'}), 400
+
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    file = request.files['file']
+    suffix = os.path.splitext(file.filename or '')[1].lower()
+
+    if suffix not in DOC_TYPES:
+        return jsonify({'error': 'Принимаются PDF, Word, Excel, txt, csv, '
+                                 'чертежи DWG и DXF, архивы zip, rar, 7z'}), 400
+
+    if ProductDoc.query.filter_by(article=key).count() >= MAX_DOCS:
+        return jsonify({'error': f'У позиции уже {MAX_DOCS} документов — '
+                                 'удалите лишние'}), 400
+
+    stored = secure_filename(f'{key[:40] or "doc"}_{secrets.token_hex(4)}{suffix}')
+    path = os.path.join(DOC_DIR, stored)
+    file.save(path)
+
+    # Имя файла — сносное название по умолчанию: «Паспорт SC-32.pdf» читается
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        title = os.path.splitext(os.path.basename(file.filename or ''))[0].strip()
+    title = (title or 'Документ')[:200]
+
+    last = (db.session.query(db.func.max(ProductDoc.sort_order))
+            .filter_by(article=key).scalar())
+
+    row = ProductDoc(article=key, shown_article=article[:120], title=title,
+                     stored=stored, suffix=suffix,
+                     size=os.path.getsize(path), sort_order=(last or 0) + 1)
+    db.session.add(row)
+    db.session.commit()
+    return jsonify(row.to_dict()), 201
+
+
+@app.route('/admin/docs/<int:doc_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def change_doc(doc_id):
+    row = db.session.get(ProductDoc, doc_id)
+    if not row:
+        return jsonify({'error': 'Документ не найден'}), 404
+
+    if request.method == 'DELETE':
+        # Файл уходит вместе с записью: иначе папка растёт молча
+        try:
+            os.remove(os.path.join(DOC_DIR, os.path.basename(row.stored)))
+        except OSError:
+            pass
+        db.session.delete(row)
+        db.session.commit()
+        return '', 204
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидался JSON с полем title'}), 400
+
+    title = str(data.get('title') or '').strip()
+    if not title:
+        return jsonify({'error': 'Название не может быть пустым'}), 400
+
+    row.title = title[:200]
     db.session.commit()
     return jsonify(row.to_dict())
 
