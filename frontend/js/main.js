@@ -104,9 +104,9 @@ function createProductCard(product) {
 function productTable(products, currentId = null) {
   const rows = products.map(product => {
     const stock = stockLabel(product);
-    // Ноль в столбце «Кол-во» читается как «кончилось», а деталь возят
-    // под заказ — так и написано
-    const quantity = product.in_stock ? `${product.stock} шт.` : 'под заказ';
+    // Столбец называется «Кол-во», поэтому и ответ про количество: ноль
+    // читался бы как «было и кончилось», а «нет» — это «нет на складе»
+    const quantity = product.in_stock ? `${product.stock} шт.` : 'нет';
 
     // Тот самый товар, на странице которого стоит таблица: ссылка на себя
     // сбивает с толку, поэтому строка просто отмечена
