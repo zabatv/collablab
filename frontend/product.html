@@ -168,11 +168,7 @@
       setMeta('description', (product.description || product.name).slice(0, 300));
       el('#breadcrumb-product').textContent = title;
 
-      // Get all images
-      const allImages = [
-        { url: product.image, alt: product.name },
-        ...product.images
-      ];
+      const allImages = gallery(product);
 
       // Build HTML
       let html = `
@@ -383,13 +379,22 @@
       section.appendChild(grid);
     }
 
+    /* Снимки карточки: главный, остальные свои, затем общие для раздела.
+       Главный лежит и в images — без проверки он становился бы второй
+       миниатюрой самого себя. */
+    function gallery(product) {
+      const seen = new Set();
+      return [{ url: product.image, alt: product.name }, ...(product.images || [])]
+        .filter(picture => {
+          if (!picture.url || seen.has(picture.url)) return false;
+          seen.add(picture.url);
+          return true;
+        });
+    }
+
     function selectImage(index) {
       const mainImage = el('#main-image');
-      const product = currentProduct;
-      const allImages = [
-        { url: product.image, alt: product.name },
-        ...product.images
-      ];
+      const allImages = gallery(currentProduct);
 
       mainImage.src = allImages[index].url;
       selectedImageIndex = index;

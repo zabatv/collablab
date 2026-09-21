@@ -45,15 +45,20 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 LOGO_DIR = os.path.join(DATA_DIR, 'logos')
 SLIDE_DIR = os.path.join(DATA_DIR, 'banners')
 DOC_DIR = os.path.join(DATA_DIR, 'docs')
+CAT_DIR = os.path.join(DATA_DIR, 'category')
 os.makedirs(LOGO_DIR, exist_ok=True)
 os.makedirs(SLIDE_DIR, exist_ok=True)
 os.makedirs(DOC_DIR, exist_ok=True)
+os.makedirs(CAT_DIR, exist_ok=True)
 
 app = Flask(__name__)
 CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{DATA_DIR}/brands.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # картинки, паспорта, выгрузки 1С
+# Картинки, паспорта, выгрузки 1С — мегабайты. Большим бывает только
+# видео раздела, у товара их бэкенд принимает до 200 МБ, и здесь так же.
+# В nginx для /site-api/ должен стоять такой же client_max_body_size.
+app.config['MAX_CONTENT_LENGTH'] = 210 * 1024 * 1024
 
 db = SQLAlchemy(app)
 
@@ -81,6 +86,16 @@ DOC_TYPES = {
 
 # Больше десятка паспортов на одну позицию — это уже не карточка товара
 MAX_DOCS = 12
+
+# Что можно повесить на раздел. Фото и видео уходят в галерею товара,
+# остальное — в его документацию. Типы те же, что принимает их бэкенд у
+# товара, плюс наш список документов.
+CAT_PHOTO_TYPES = {
+    '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.png': 'image/png', '.webp': 'image/webp',
+}
+CAT_VIDEO_TYPES = {'.mp4': 'video/mp4', '.webm': 'video/webm'}
+MAX_CATEGORY_FILES = 20
 NAME_LIMIT = 60
 
 # Откуда брать товары для разбора каталога. Внутри туннеля, без пароля.
@@ -225,6 +240,37 @@ class ProductDoc(db.Model):
             'title': self.title,
             'url': f'/files/docs/{self.stored}',
             'kind': (self.suffix or '').lstrip('.').upper(),
+            'size': self.size or 0,
+            'sort_order': self.sort_order or 0,
+        }
+
+
+# Файлы раздела. Одно и то же фото, видео или паспорт на десяток почти
+# одинаковых позиций заливать по разу на каждую — работа на пустом месте.
+# Здесь они лежат один раз, а карточка товара подмешивает их к своим:
+# фото и видео в галерею, остальное в документацию.
+
+class CategoryFile(db.Model):
+    __tablename__ = 'category_files'
+
+    id = db.Column(db.Integer, primary_key=True)
+    category_id = db.Column(db.Integer, nullable=False, index=True)
+    kind = db.Column(db.String(10), nullable=False)      # photo | video | doc
+    title = db.Column(db.String(200), nullable=False)
+    stored = db.Column(db.String(255), nullable=False)   # имя файла на диске
+    suffix = db.Column(db.String(10), default='')
+    size = db.Column(db.Integer, default=0)
+    sort_order = db.Column(db.Integer, default=0, index=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'category_id': self.category_id,
+            'kind': self.kind,
+            'title': self.title,
+            'url': f'/files/category/{self.stored}',
+            'ext': (self.suffix or '').lstrip('.').upper(),
             'size': self.size or 0,
             'sort_order': self.sort_order or 0,
         }
@@ -421,6 +467,111 @@ def product_docs(article):
             .order_by(ProductDoc.sort_order, ProductDoc.id)
             .all())
     return jsonify({'article': article, 'items': [row.to_dict() for row in rows]})
+
+
+@app.route('/categories/<int:category_id>/files')
+def category_files(category_id):
+    """Фото, видео и документы раздела — их получает каждый его товар."""
+    rows = (CategoryFile.query
+            .filter_by(category_id=category_id)
+            .order_by(CategoryFile.sort_order, CategoryFile.id)
+            .all())
+    return jsonify({'category_id': category_id,
+                    'items': [row.to_dict() for row in rows]})
+
+
+@app.route('/files/category/<path:name>')
+def category_file(name):
+    """Файл раздела.
+
+    Картинки и видео открываются в странице, документы качаются — кроме
+    PDF, его смотрят не скачивая. Тип берётся из своего списка, а не из
+    заголовка запроса: файл лежит на том же домене, что и сайт."""
+    safe = secure_filename(name)
+    suffix = os.path.splitext(safe)[1].lower()
+    inline = {**CAT_PHOTO_TYPES, **CAT_VIDEO_TYPES, '.pdf': 'application/pdf'}
+
+    answer = send_from_directory(
+        CAT_DIR, safe,
+        mimetype=inline.get(suffix) or DOC_TYPES.get(suffix, 'application/octet-stream'),
+        as_attachment=(suffix not in inline))
+    answer.headers['X-Content-Type-Options'] = 'nosniff'
+    return answer
+
+
+@app.route('/admin/categories/<int:category_id>/files', methods=['POST'])
+@require_admin
+def upload_category_file(category_id):
+    if 'file' not in request.files:
+        return jsonify({'error': 'Файл не выбран'}), 400
+
+    file = request.files['file']
+    suffix = os.path.splitext(file.filename or '')[1].lower()
+
+    if suffix in CAT_PHOTO_TYPES:
+        kind = 'photo'
+    elif suffix in CAT_VIDEO_TYPES:
+        kind = 'video'
+    elif suffix in DOC_TYPES:
+        kind = 'doc'
+    else:
+        return jsonify({'error': 'Принимаются фото JPEG, PNG, WebP, '
+                                 'видео MP4 и WebM, PDF, Word, Excel, txt, csv, '
+                                 'чертежи DWG и DXF, архивы zip, rar, 7z'}), 400
+
+    if CategoryFile.query.filter_by(category_id=category_id).count() >= MAX_CATEGORY_FILES:
+        return jsonify({'error': f'У раздела уже {MAX_CATEGORY_FILES} файлов — '
+                                 'удалите лишние'}), 400
+
+    stored = secure_filename(f'c{category_id}_{secrets.token_hex(4)}{suffix}')
+    path = os.path.join(CAT_DIR, stored)
+    file.save(path)
+
+    # Имя файла — сносное название по умолчанию: «Каталог SMC.pdf» читается
+    title = (request.form.get('title') or '').strip()
+    if not title:
+        title = os.path.splitext(os.path.basename(file.filename or ''))[0].strip()
+    title = (title or 'Файл')[:200]
+
+    last = (db.session.query(db.func.max(CategoryFile.sort_order))
+            .filter_by(category_id=category_id).scalar())
+
+    row = CategoryFile(category_id=category_id, kind=kind, title=title,
+                       stored=stored, suffix=suffix,
+                       size=os.path.getsize(path), sort_order=(last or 0) + 1)
+    db.session.add(row)
+    db.session.commit()
+    return jsonify(row.to_dict()), 201
+
+
+@app.route('/admin/categories/files/<int:file_id>', methods=['PUT', 'DELETE'])
+@require_admin
+def change_category_file(file_id):
+    row = db.session.get(CategoryFile, file_id)
+    if not row:
+        return jsonify({'error': 'Файл не найден'}), 404
+
+    if request.method == 'DELETE':
+        # Файл уходит вместе с записью: иначе папка растёт молча
+        try:
+            os.remove(os.path.join(CAT_DIR, os.path.basename(row.stored)))
+        except OSError:
+            pass
+        db.session.delete(row)
+        db.session.commit()
+        return '', 204
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидался JSON с полем title'}), 400
+
+    title = str(data.get('title') or '').strip()
+    if not title:
+        return jsonify({'error': 'Название не может быть пустым'}), 400
+
+    row.title = title[:200]
+    db.session.commit()
+    return jsonify(row.to_dict())
 
 
 @app.route('/files/docs/<path:name>')

@@ -367,6 +367,23 @@ const AdminAPI = {
      сервисе, по артикулу. */
   getDocuments: (article) => ON_NODE ? NodeAPI.productDocs(article) : Promise.resolve([]),
 
+  /* Файлы раздела: одни на все его товары. Живут в нашем сервисе — их
+     бэкенд вешает медиа только на товар, а на категорию не умеет. */
+  getCategoryFiles: (id) =>
+    ON_NODE ? NodeAPI.adminCategoryFiles(id) : Promise.resolve([]),
+
+  uploadCategoryFile: (id, file) =>
+    ON_NODE ? NodeAPI.uploadCategoryFile(id, file)
+            : NodeAPI.missing('Файлов раздела'),
+
+  renameCategoryFile: (fileId, title) =>
+    ON_NODE ? NodeAPI.renameCategoryFile(fileId, title)
+            : NodeAPI.missing('Файлов раздела'),
+
+  deleteCategoryFile: (fileId) =>
+    ON_NODE ? NodeAPI.deleteCategoryFile(fileId)
+            : NodeAPI.missing('Файлов раздела'),
+
   uploadDocument: (article, file, title) =>
     ON_NODE ? NodeAPI.uploadProductDoc(article, file, title)
             : NodeAPI.missing('Документации к товару'),

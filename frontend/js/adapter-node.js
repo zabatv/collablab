@@ -771,6 +771,44 @@ const NodeAPI = (() => {
     return details;
   }
 
+  /* Те же файлы, но повешенные на раздел, — список для админки и
+     загрузка. Витрина читает их в categoryFiles(). */
+  async function adminCategoryFiles(categoryId) {
+    if (!siteBase() || !categoryId) return [];
+    const data = await call(siteBase(), `/categories/${categoryId}/files`);
+    return (data.items || []).map(file => ({
+      ...file,
+      url: `${siteBase()}${file.url}`,
+    }));
+  }
+
+  async function uploadCategoryFile(categoryId, file, title = '') {
+    if (!siteBase()) throw new Error('Сервис сайта не настроен');
+
+    const form = new FormData();
+    form.append('file', file);
+    if (title) form.append('title', title);
+
+    // FormData отправляется сам: call() кладёт JSON, а здесь нужен multipart
+    const response = await fetch(
+      `${siteBase()}/admin/categories/${categoryId}/files`,
+      { method: 'POST', headers: basicHeader(), body: form });
+
+    const details = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(details?.error || `Сервер ответил ошибкой ${response.status}`);
+    }
+    return details;
+  }
+
+  const renameCategoryFile = (fileId, title) =>
+    call(siteBase(), `/admin/categories/files/${fileId}`,
+         { method: 'PUT', headers: basicHeader(), body: { title } });
+
+  const deleteCategoryFile = (fileId) =>
+    call(siteBase(), `/admin/categories/files/${fileId}`,
+         { method: 'DELETE', headers: basicHeader() });
+
   const renameProductDoc = (docId, title) =>
     call(siteBase(), `/admin/docs/${docId}`,
          { method: 'PUT', headers: basicHeader(), body: { title } });
@@ -788,16 +826,50 @@ const NodeAPI = (() => {
     const adapted = adaptProduct(item);
     if (!adapted) return adapted;
 
-    const [stored, docs] = await Promise.all([
+    const [stored, docs, shared] = await Promise.all([
       productSpecs(adapted.sku),
       productDocs(adapted.sku),
+      categoryFiles(adapted.category?.id),
     ]);
 
     // Вписанное руками важнее разобранного из наименования
     if (stored.length) adapted.specifications = stored;
-    adapted.documents = docs;
+
+    // Своё у товара идёт первым, общее для раздела — следом: покупатель
+    // смотрит на свою позицию, а паспорт на всю линейку читает потом
+    adapted.images = [...adapted.images, ...shared.images];
+    adapted.videos = [...adapted.videos, ...shared.videos];
+    adapted.documents = [...docs, ...shared.documents];
 
     return adapted;
+  }
+
+  /* Фото, видео и документы, повешенные на раздел. Одна линейка почти
+     одинаковых позиций делит и паспорт, и снимок, и ролик, поэтому они
+     заливаются один раз на раздел, а не по разу на каждый товар.
+
+     Молчание сервиса — не ошибка страницы: карточка просто покажет то,
+     что есть у самого товара. */
+  async function categoryFiles(categoryId) {
+    const nothing = { images: [], videos: [], documents: [] };
+    if (!siteBase() || !categoryId) return nothing;
+
+    try {
+      const data = await call(siteBase(), `/categories/${categoryId}/files`);
+      const found = { images: [], videos: [], documents: [] };
+
+      (data.items || []).forEach(file => {
+        const url = `${siteBase()}${file.url}`;
+        if (file.kind === 'photo') found.images.push({ url, alt: file.title });
+        else if (file.kind === 'video') found.videos.push({ url, title: file.title });
+        else found.documents.push({ ...file, url, kind: file.ext || 'файл' });
+      });
+
+      return found;
+    } catch (error) {
+      console.warn('Файлы раздела недоступны:', error.message);
+      return nothing;
+    }
   }
 
   // Отбор по бренду их API не умеет — бренды не его. Поэтому фильтр,
@@ -1013,6 +1085,7 @@ const NodeAPI = (() => {
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
     categoryTexts, saveCategoryText, productSpecs, saveProductSpecs,
+    adminCategoryFiles, uploadCategoryFile, renameCategoryFile, deleteCategoryFile,
     lastChange, linkedTo1c, createCategory, updateCategory, deleteCategory,
     productDocs, uploadProductDoc, renameProductDoc, deleteProductDoc,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,

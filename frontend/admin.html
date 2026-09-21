@@ -2005,6 +2005,34 @@
     </div>
   </div>
 
+  <!-- Файлы раздела: одни на все его товары -->
+  <div class="modal" id="cat-files-modal">
+    <div class="modal-content">
+      <span class="modal-close" onclick="closeCategoryFilesModal()">&times;</span>
+      <h2>ФАЙЛЫ РАЗДЕЛА</h2>
+      <p class="text-muted" id="cat-files-label" style="margin-top: 8px;"></p>
+
+      <div class="upload-drop" id="cat-file-drop" style="margin-top: 20px;">
+        <input type="file" id="cat-file-input"
+               accept=".jpg,.jpeg,.png,.webp,.mp4,.webm,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.dwg,.dxf,.zip,.rar,.7z"
+               multiple hidden>
+        <div class="upload-drop-title">Перетащите фото, видео и паспорта сюда</div>
+        <div class="upload-drop-hint">
+          или нажмите, чтобы выбрать — JPEG, PNG, WebP, MP4, WebM, PDF, Word,
+          Excel, DWG, DXF, архивы
+        </div>
+      </div>
+
+      <div id="cat-files-list" style="margin-top: 12px;"></div>
+
+      <small class="text-muted" style="display: block; margin-top: 12px;">
+        Всё, что здесь лежит, появляется в каждом товаре раздела: фото и
+        видео — в галерее после своих, остальное — в документации. Товары
+        вложенных подкатегорий берут файлы своей, а не этой.
+      </small>
+    </div>
+  </div>
+
   <!-- Add Brand Modal -->
   <div class="modal" id="brand-modal">
     <div class="modal-content">
@@ -3779,6 +3807,7 @@
     setupDropzone('#image-drop', '#product-image-input', addImageFiles);
     setupDropzone('#video-drop', '#product-video-input', addVideoFiles);
     setupDropzone('#doc-drop', '#product-doc-input', addDocFiles);
+    setupDropzone('#cat-file-drop', '#cat-file-input', addCategoryFiles);
 
     async function deleteVideo(videoId) {
       if (!confirm('Удалить это видео?')) return;
@@ -3973,6 +4002,7 @@
         iconButton(category),
         smallButton('+ Подкатегория', () => openAddCategoryModal(category.id)),
         smallButton('Описание', () => openCategoryTextModal(category)),
+        smallButton('Файлы', () => openCategoryFilesModal(category)),
         smallButton('Изменить', () => openEditCategoryModal(category)),
         smallButton('Удалить', () => removeCategory(category), 'danger'));
       row.appendChild(actions);
@@ -4294,6 +4324,116 @@
     function closeCategoryTextModal() {
       el('#cat-text-modal').classList.remove('active');
       describingCategoryId = null;
+    }
+
+    /* Файлы раздела: одно фото, ролик или паспорт на всю линейку. Класть
+       их по разу в каждый из десятка почти одинаковых товаров — работа на
+       пустом месте, поэтому они висят на разделе, а карточка подмешивает
+       их к своим. */
+
+    let filesCategoryId = null;
+    let categoryFileList = [];
+
+    function openCategoryFilesModal(category) {
+      filesCategoryId = category.id;
+      el('#cat-files-label').textContent = category.name;
+      el('#cat-files-modal').classList.add('active');
+      loadCategoryFiles();
+    }
+
+    function closeCategoryFilesModal() {
+      el('#cat-files-modal').classList.remove('active');
+      filesCategoryId = null;
+    }
+
+    async function loadCategoryFiles() {
+      const host = el('#cat-files-list');
+      host.innerHTML = '<p class="text-muted">Загружаю…</p>';
+
+      try {
+        categoryFileList = await AdminAPI.getCategoryFiles(filesCategoryId);
+        renderCategoryFiles();
+      } catch (error) {
+        host.innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
+      }
+    }
+
+    const FILE_KIND = { photo: 'фото', video: 'видео', doc: 'документ' };
+
+    function renderCategoryFiles() {
+      const host = el('#cat-files-list');
+      clear(host);
+
+      if (!categoryFileList.length) {
+        host.innerHTML = '<p class="text-muted">Файлов нет</p>';
+        return;
+      }
+
+      categoryFileList.forEach(file => {
+        const row = document.createElement('div');
+        row.className = 'doc-row';
+
+        const kind = document.createElement('span');
+        kind.className = 'doc-kind';
+        kind.textContent = FILE_KIND[file.kind] || file.ext || 'файл';
+
+        const link = document.createElement('a');
+        link.className = 'doc-row-title';
+        link.href = file.url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.textContent = file.title;
+
+        const size = document.createElement('span');
+        size.className = 'doc-size num';
+        size.textContent = fileSize(file.size);
+
+        const rename = smallButton('Переименовать', () => renameCategoryFile(file));
+        const remove = smallButton('Удалить', () => removeCategoryFile(file), 'danger');
+
+        row.append(kind, link, size, rename, remove);
+        host.appendChild(row);
+      });
+    }
+
+    async function addCategoryFiles(files) {
+      if (!filesCategoryId) return;
+
+      for (const file of [...files]) {
+        try {
+          await AdminAPI.uploadCategoryFile(filesCategoryId, file);
+        } catch (error) {
+          // Один отказ не должен обрывать остальные файлы
+          showNotification(`${file.name}: ${failureText(error)}`, 'error');
+        }
+      }
+
+      showNotification('Файлы загружены');
+      loadCategoryFiles();
+    }
+
+    async function renameCategoryFile(file) {
+      const title = prompt('Название файла', file.title);
+      if (title === null) return;
+
+      try {
+        await AdminAPI.renameCategoryFile(file.id, title.trim());
+        loadCategoryFiles();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
+    }
+
+    async function removeCategoryFile(file) {
+      if (!confirm(`Удалить «${file.title}»?`)) return;
+
+      try {
+        await AdminAPI.deleteCategoryFile(file.id);
+        showNotification('Файл удалён');
+        loadCategoryFiles();
+      } catch (error) {
+        showNotification(failureText(error), 'error');
+      }
     }
 
     el('#cat-text-form').addEventListener('submit', async (e) => {
