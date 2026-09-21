@@ -167,8 +167,7 @@ a,
 label,
 summary,
 .card,
-.nav-item,
-.filter-option {
+.nav-item {
   touch-action: manipulation;
 }
 
@@ -1201,19 +1200,9 @@ header {
 }
 
 /* ===== CATALOGUE LAYOUT ===== */
+/* Колонка фильтров убрана, список занимает всю ширину */
 .catalog-layout {
-  display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
-  gap: var(--space-xl);
-  align-items: start;
-}
-
-.catalog-aside {
-  position: sticky;
-  top: 96px;
-  max-height: calc(100vh - 120px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  display: block;
 }
 
 .catalog-toolbar {
@@ -1455,13 +1444,6 @@ td.ptable-price {
   }
 }
 
-/* On a phone the filters fold away instead of squeezing the grid off screen */
-.filters-toggle {
-  display: none;
-  width: 100%;
-  justify-content: space-between;
-}
-
 /* ===== CATALOGUE BREADCRUMBS =====
    The trail back up the tree. The product page has its own .breadcrumb,
    which is a container rather than a step, so these keep their own names. */
@@ -1506,90 +1488,6 @@ td.ptable-price {
 
 #subcategories {
   margin-bottom: var(--space-xl);
-}
-
-/* ===== FILTERS ===== */
-.filters {
-  background: var(--surface);
-  padding: var(--space-md);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-}
-
-.filter-group {
-  margin-bottom: var(--space-md);
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--line);
-}
-
-.filter-group:last-of-type {
-  border-bottom: 0;
-}
-
-.filter-group h4 {
-  margin-bottom: var(--space-xs);
-  font-size: var(--text-2xs);
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
-.filter-options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3xs);
-}
-
-.filter-option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  cursor: pointer;
-  padding: 5px var(--space-xs);
-  margin: 0 calc(var(--space-xs) * -1);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  transition: background-color var(--quick) ease;
-}
-
-.filter-option input {
-  cursor: pointer;
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  flex: none;
-}
-
-.filter-option label {
-  cursor: pointer;
-  flex: 1;
-  margin: 0;
-  font-weight: 500;
-  line-height: 1.35;
-}
-
-.filter-count {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-2xs);
-  color: var(--ink-muted);
-}
-
-.filter-select {
-  width: 100%;
-  padding: 8px var(--space-xs);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font-size: var(--text-sm);
-  outline: none;
-  transition: border-color var(--quick) ease, box-shadow var(--quick) ease;
-}
-
-.filter-select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-wash);
 }
 
 /* ===== FORMS ===== */
@@ -2497,10 +2395,6 @@ footer {
     color: var(--ink);
   }
 
-  .filter-option:hover {
-    background: var(--surface-sunken);
-  }
-
   .pagination button:hover:not(:disabled):not(.active) {
     border-color: var(--line-strong);
     color: var(--ink);
@@ -2524,7 +2418,6 @@ footer {
   textarea,
   select,
   .search-bar input,
-  .filter-select,
   .form-group input,
   .form-group textarea,
   .form-group select {
@@ -2552,15 +2445,6 @@ footer {
   }
 
 
-  .filter-option {
-    min-height: 40px;
-  }
-
-  .filter-option input {
-    width: 18px;
-    height: 18px;
-  }
-
   .search-clear {
     width: 32px;
     height: 32px;
@@ -2582,39 +2466,9 @@ footer {
 }
 
 /* ===== RESPONSIVE ===== */
-@media (max-width: 1024px) {
-  .catalog-layout {
-    grid-template-columns: 220px minmax(0, 1fr);
-    gap: var(--space-lg);
-  }
-}
-
 @media (max-width: 860px) {
   :root {
     --gutter: var(--space-md);
-  }
-
-  .catalog-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .catalog-aside {
-    position: static;
-    max-height: none;
-    overflow: visible;
-  }
-
-  .filters-toggle {
-    display: inline-flex;
-    margin-bottom: var(--space-sm);
-  }
-
-  .catalog-aside .filters {
-    display: none;
-  }
-
-  .catalog-aside.open .filters {
-    display: block;
   }
 
   .product-details {

@@ -9,8 +9,8 @@
   <meta name="description" content="299 позиций: фитинги, пневмоцилиндры, распределители, клапаны, реле, датчики. Фильтр по категориям и брендам, цены и характеристики.">
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
-  <link rel="icon" href="img/favicon.png?v=20261025" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261025">
+  <link rel="icon" href="img/favicon.png?v=20261026" type="image/png">
+  <link rel="stylesheet" href="css/style.css?v=20261026">
 </head>
 <body>
   <!-- Header -->
@@ -24,7 +24,7 @@
 
     <div class="container">
       <div class="flex-between header-main" style="gap: 24px; flex-wrap: wrap;">
-        <a class="logo" href="index.html" aria-label="РОБОТ — на главную"><img src="img/logo.png" alt="РОБОТ" width="504" height="240"></a>
+        <a class="logo" href="index.html" aria-label="РОБОТ — на главную"><img src="img/logo.png?v=20261026" alt="РОБОТ" width="1008" height="480"></a>
 
         <div class="search-bar" id="search-bar">
           <input
@@ -46,36 +46,6 @@
     <p class="catalog-lead text-muted" id="catalog-lead" hidden></p>
 
     <div class="catalog-layout">
-
-      <!-- Filters -->
-      <aside class="catalog-aside" id="catalog-aside">
-        <button type="button" class="btn btn-secondary filters-toggle" onclick="toggleFilters()">
-          <span>Категории и фильтры</span>
-          <span id="filters-toggle-state">показать</span>
-        </button>
-
-        <div class="filters">
-
-          <!-- Sort -->
-          <div class="filter-group">
-            <h4>Сортировка</h4>
-            <select id="sort-select" class="filter-select" onchange="applyFilters()">
-              <option value="newest">Новые</option>
-              <option value="name">По названию</option>
-              <option value="price_asc">Цена: по возрастанию</option>
-              <option value="price_desc">Цена: по убыванию</option>
-            </select>
-          </div>
-
-          <!-- Brands: hidden until the catalogue actually has brands -->
-          <div class="filter-group" id="brands-group" style="display: none;">
-            <h4>Бренды</h4>
-            <div class="filter-options" id="brands-filter"></div>
-          </div>
-
-          <button class="btn btn-ghost" onclick="resetFilters()" style="width: 100%;">Показать все товары</button>
-        </div>
-      </aside>
 
       <!-- Products -->
       <section>
@@ -106,7 +76,7 @@
     <div class="container">
       <div class="footer-content">
         <div class="footer-section">
-          <a class="logo" href="index.html" aria-label="РОБОТ — на главную"><img src="img/logo.png" alt="РОБОТ" width="504" height="240"></a>
+          <a class="logo" href="index.html" aria-label="РОБОТ — на главную"><img src="img/logo.png?v=20261026" alt="РОБОТ" width="1008" height="480"></a>
           <p class="text-muted" style="max-width: 32ch;">
             Пневматика, электроавтоматика и приборы контроля для промышленного оборудования.
           </p>
@@ -148,12 +118,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261025"></script>
-  <script src="js/adapter-node.js?v=20261025"></script>
-  <script src="js/api.js?v=20261025"></script>
-  <script src="js/main.js?v=20261025"></script>
-  <script src="js/effects.js?v=20261025"></script>
-  <script src="js/consent.js?v=20261025"></script>
+  <script src="js/config.js?v=20261026"></script>
+  <script src="js/adapter-node.js?v=20261026"></script>
+  <script src="js/api.js?v=20261026"></script>
+  <script src="js/main.js?v=20261026"></script>
+  <script src="js/effects.js?v=20261026"></script>
+  <script src="js/consent.js?v=20261026"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -186,27 +156,14 @@
         renderHeading();
         renderSubcategories();
 
-        const brands = await ProductAPI.getBrands();
-        const brandsFilter = el('#brands-filter');
-        clear(brandsFilter);
-        el('#brands-group').style.display = brands.length ? '' : 'none';
-
-        // A brand may arrive in the address: clicking its mark anywhere on
-        // the site lands here with everything it makes already selected
+        // Бренд приходит адресом: по марке на странице товара попадают
+        // сюда, уже отобранными
         const wanted = currentBrandId();
-        openBrand = brands.find(brand => brand.id === wanted) || null;
-
-        brands.forEach(brand => {
-          brandsFilter.innerHTML += `
-            <div class="filter-option">
-              <input type="checkbox" id="brand-${brand.id}" value="${brand.id}"
-                     ${brand.id === wanted ? 'checked' : ''} onchange="applyFilters()">
-              <label for="brand-${brand.id}">${escapeHtml(brand.name)}</label>
-            </div>
-          `;
-        });
-
-        if (openBrand) renderHeading();
+        if (wanted) {
+          const brands = await ProductAPI.getBrands();
+          openBrand = brands.find(brand => brand.id === wanted) || null;
+          if (openBrand) renderHeading();
+        }
       } catch (error) {
         console.error('Error loading filters:', error);
       }
@@ -286,11 +243,11 @@
     async function applyFilters() {
       currentPage = 1;
 
-      const selectedBrands = elAll('#brands-filter input:checked');
-      const sort = el('#sort-select').value;
-
       currentFilters = {
-        sort: sort,
+        // Выбор сортировки убран вместе с колонкой фильтров. По названию —
+        // единственный порядок, при котором одна линейка идёт подряд:
+        // PW8-4, PW8-6, PW10-6, а не вразнобой по дате появления.
+        sort: 'name',
         page: currentPage,
         per_page: 24
       };
@@ -306,8 +263,9 @@
       if (openCategory) {
         currentFilters.category_id = openCategory.id;
       }
-      if (selectedBrands.length === 1) {
-        currentFilters.brand_id = selectedBrands[0].value;
+      const brand = currentBrandId();
+      if (brand) {
+        currentFilters.brand_id = brand;
       }
 
       loadProducts();
@@ -329,8 +287,8 @@
           grid.innerHTML = `
             <div class="empty-state" style="grid-column: 1/-1;">
               <h2>Ничего не найдено</h2>
-              <p>Попробуйте другой запрос или снимите фильтры.</p>
-              <button class="btn btn-secondary" onclick="resetFilters()">Очистить фильтры</button>
+              <p>Попробуйте другой запрос или откройте весь каталог.</p>
+              <button class="btn btn-secondary" onclick="resetFilters()">Все товары</button>
             </div>`;
         }
 
@@ -356,18 +314,9 @@
         parts.push((openCategory.path || []).map(node => node.name).join(' → '));
       }
 
-      // Whatever is ticked now, not only what the address arrived with
-      elAll('#brands-filter input:checked').forEach(input => {
-        parts.push(`бренд ${input.nextElementSibling.textContent.trim()}`);
-      });
+      if (openBrand) parts.push(`бренд ${openBrand.name}`);
 
       el('#active-filter').textContent = parts.length ? parts.join(' · ') : '';
-    }
-
-    function toggleFilters() {
-      const aside = el('#catalog-aside');
-      const open = aside.classList.toggle('open');
-      el('#filters-toggle-state').textContent = open ? 'скрыть' : 'показать';
     }
 
     function renderPagination(totalPages, currentPage) {
