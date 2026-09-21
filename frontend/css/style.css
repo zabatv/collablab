@@ -2037,16 +2037,6 @@ td.ptable-price {
   text-decoration: line-through;
 }
 
-.product-actions {
-  display: flex;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
-}
-
-.product-actions .btn {
-  flex: 1;
-}
-
 .product-description {
   font-size: var(--text-sm);
   color: var(--ink-soft);
@@ -2914,10 +2904,6 @@ footer {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
-  }
-
-  .product-actions {
-    flex-direction: column;
   }
 
   .spec-table td:first-child {
