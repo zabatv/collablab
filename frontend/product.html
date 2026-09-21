@@ -274,6 +274,24 @@
         `;
       }
 
+      // Снимки, повешенные на раздел: чертёж серии, схема подключения.
+      // Не ракурсы этой позиции, поэтому не в ленте миниатюр, а здесь
+      if (product.category_images && product.category_images.length) {
+        html += `
+          <div class="shared-photos reveal">
+            <h3>${escapeHtml(product.category?.name || 'Раздел')}</h3>
+            <div class="shared-photo-grid">
+              ${product.category_images.map(picture => `
+                <a href="${escapeHtml(picture.url)}" target="_blank" rel="noopener">
+                  <img src="${escapeHtml(picture.url)}" alt="${escapeHtml(picture.alt || '')}"
+                       loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
+                </a>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
       html += '<div id="product-videos-section"></div>';
 
       el('#product-container').innerHTML = html;

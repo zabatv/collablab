@@ -835,9 +835,11 @@ const NodeAPI = (() => {
     // Вписанное руками важнее разобранного из наименования
     if (stored.length) adapted.specifications = stored;
 
-    // Своё у товара идёт первым, общее для раздела — следом: покупатель
-    // смотрит на свою позицию, а паспорт на всю линейку читает потом
-    adapted.images = [...adapted.images, ...shared.images];
+    /* Фото раздела в галерею не идут: в ленте миниатюр они читаются как
+       другой ракурс этой же позиции, а это снимки всей серии. Им свой
+       блок ниже по странице. Видео и документы общие с товарными: там
+       список, а не карусель, и лишнего впечатления не создаётся. */
+    adapted.category_images = shared.images;
     adapted.videos = [...adapted.videos, ...shared.videos];
     adapted.documents = [...docs, ...shared.documents];
 
