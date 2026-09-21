@@ -1610,11 +1610,14 @@
           <span class="import-progress-label" id="import-progress-label"></span>
         </div>
 
-        <!-- Appears once something is ticked; the brand goes on those rows -->
+        <!-- Appears once something is ticked; the brand or the section
+             goes on those rows -->
         <div class="bulk-bar" id="bulk-bar" hidden>
           <span class="bulk-count" id="bulk-count"></span>
+          <select id="bulk-category" class="bulk-select"></select>
+          <button type="button" class="btn btn-primary" onclick="applyBulkCategory()">Перенести в раздел</button>
           <select id="bulk-brand" class="bulk-select"></select>
-          <button type="button" class="btn btn-primary" onclick="applyBulkBrand()">Проставить бренд</button>
+          <button type="button" class="btn btn-secondary" onclick="applyBulkBrand()">Проставить бренд</button>
           <button type="button" class="btn btn-ghost" onclick="clearSelection()">Снять выделение</button>
         </div>
 
@@ -2960,6 +2963,25 @@
 
       el('#bulk-count').textContent = `Отмечено: ${selectedProducts.size}`;
       fillBulkBrands();
+      fillBulkCategories();
+    }
+
+    async function fillBulkCategories() {
+      const select = el('#bulk-category');
+      if (select.dataset.filled) return;
+
+      try {
+        // Дерево уже могло прийти во вкладке «Категории»; если нет — спросим
+        if (!categoryTree.length) categoryTree = await AdminAPI.getCategories();
+        select.innerHTML = '<option value="">— раздел не выбран —</option>';
+        categoryOptions(categoryTree).forEach(option => {
+          select.innerHTML +=
+            `<option value="${option.id}">${escapeHtml(option.name)}</option>`;
+        });
+        select.dataset.filled = '1';
+      } catch (error) {
+        reportFailure('Не удалось загрузить разделы', error);
+      }
     }
 
     async function fillBulkBrands() {
@@ -2984,6 +3006,44 @@
       const all = el('#tick-all');
       if (all) all.checked = false;
       updateBulkBar();
+    }
+
+    /* Перенос отмеченных товаров в выбранный раздел. Массового эндпоинта
+       у них нет, поэтому идём по одному, пятёрками: сотня товаров не
+       должна открывать сотню соединений разом. Перенос поднимает их флаг
+       manually_edited — 1С потом не утащит товар обратно. */
+    async function applyBulkCategory() {
+      if (!selectedProducts.size) return;
+
+      const value = el('#bulk-category').value;
+      if (!value) {
+        showNotification('Сначала выберите раздел', 'error');
+        return;
+      }
+
+      const name = el('#bulk-category').selectedOptions[0].textContent.replace(/^[—\s]+/, '');
+      const ids = [...selectedProducts];
+      let moved = 0;
+      const failed = [];
+
+      for (let from = 0; from < ids.length; from += 5) {
+        const batch = ids.slice(from, from + 5);
+        await Promise.all(batch.map(async id => {
+          try {
+            await AdminAPI.updateProduct(id, { category_id: Number(value) });
+            moved += 1;
+          } catch (error) {
+            failed.push(failureText(error));
+          }
+        }));
+      }
+
+      showNotification(failed.length
+        ? `Перенесено ${moved} из ${ids.length}. Не удалось: ${failed[0]}`
+        : `Перенесено в «${name}»: ${moved}`, failed.length ? 'error' : 'success');
+
+      clearSelection();
+      loadProducts(currentProductsPage);
     }
 
     async function applyBulkBrand() {
@@ -3882,30 +3942,22 @@
           return;
         }
 
-        categoryTree.forEach((section, index) =>
-          list.appendChild(categoryRow(section, categoryTree, index, 0)));
+        categoryTree.forEach(section => list.appendChild(categoryRow(section, 0)));
       } catch (error) {
         reportFailure('Не удалось загрузить категории', error);
         el('#categories-list').innerHTML = `<p class="text-muted">${failureText(error)}</p>`;
       }
     }
 
-    // One category and everything under it. `siblings` and `index` are what
-    // the arrows need: a category only moves among its own level.
-    function categoryRow(category, siblings, index, depth) {
+    // One category and everything under it. Order comes from the backend,
+    // by name — nothing to drag here.
+    function categoryRow(category, depth) {
       const node = document.createElement('div');
       node.className = 'cat-admin-node';
       node.style.marginLeft = depth ? '28px' : '0';
 
       const row = document.createElement('div');
       row.className = 'cat-admin-row' + (depth ? '' : ' cat-admin-section');
-
-      const order = document.createElement('div');
-      order.className = 'cat-admin-order';
-      order.append(
-        arrowButton('↑', index === 0, () => moveCategory(siblings, index, -1)),
-        arrowButton('↓', index === siblings.length - 1, () => moveCategory(siblings, index, 1)));
-      row.appendChild(order);
 
       const title = document.createElement('div');
       title.className = 'cat-admin-title';
@@ -3927,8 +3979,8 @@
 
       node.appendChild(row);
 
-      (category.children || []).forEach((child, childIndex) =>
-        node.appendChild(categoryRow(child, category.children, childIndex, depth + 1)));
+      (category.children || []).forEach(child =>
+        node.appendChild(categoryRow(child, depth + 1)));
 
       return node;
     }
@@ -4141,22 +4193,6 @@
       button.textContent = label;
       button.onclick = onClick;
       return button;
-    }
-
-    // Swaps two neighbours and stores the whole row's new order
-    async function moveCategory(siblings, index, step) {
-      const target = index + step;
-      if (target < 0 || target >= siblings.length) return;
-
-      [siblings[index], siblings[target]] = [siblings[target], siblings[index]];
-
-      try {
-        await AdminAPI.reorderCategories(siblings.map(item => item.id));
-        loadCategories();
-      } catch (error) {
-        reportFailure('Не удалось сохранить порядок', error);
-        loadCategories();
-      }
     }
 
     async function removeCategory(category) {
