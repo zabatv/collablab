@@ -10,6 +10,11 @@
 `admin-products.js`) и ничего в их файлах не переписывает: добавляется один
 новый файл и одна строка подключения.
 
+Папка лежит внутри сайта нарочно: каталог живёт на Windows, а код — на VPS,
+и единственный общий канал между ними — сам сайт. Поэтому файлы видно по
+адресу `https://robots07.com/backend/`, и Windows-машина ставит их одной
+командой, ничего не копируя руками. Секретов здесь нет — это наш же код.
+
 ## Что он делает
 
 | Метод | Путь | |
@@ -41,60 +46,50 @@
 
 ## Установка на Windows
 
-Бэкенд лежит в `C:\shop-backend`. Останавливать службы не нужно, кроме
-последнего шага — перезапуска админского сервера.
-
-**1. Положить файл.** Открыть пустой файл в блокноте:
+Файлы лежат в папке сайта, поэтому их видно по адресу — качать ничего
+вручную не надо. Одна строка в PowerShell на Windows-машине:
 
 ```powershell
-notepad C:\shop-backend\src\routes\admin-categories.js
+[Net.ServicePointManager]::SecurityProtocol='Tls12'; iwr https://robots07.com/backend/install-categories.ps1 -OutFile $env:TEMP\i.ps1 -UseBasicParsing; powershell -ExecutionPolicy Bypass -File $env:TEMP\i.ps1
 ```
 
-Блокнот спросит, создавать ли файл — да. Вставить содержимое
-`admin-categories.js` из этой папки, сохранить (Ctrl+S). Кодировка по
-умолчанию UTF-8 — то, что нужно.
+Скрипт кладёт `src/routes/admin-categories.js`, дописывает две строки в
+`src/admin-app.js` (прежний файл сохраняет рядом как
+`admin-app.js.before-categories`) и проверяет, что получилось. Повторный
+запуск безопасен: уже сделанное он не дублирует. Если бэкенд лежит не в
+`C:\shop-backend`, добавить `-Backend C:\путь\к\бэкенду`.
 
-**2. Подключить в админском сервере.** Одна строка в `src/admin-app.js`.
-Команда ниже вписывает её сама (всё на латинице, консоль ничего не испортит):
+Остаётся **перезапустить сервер админки** (порт 3001) — тем же способом,
+каким он запущен. После этого категории заводятся и правятся из админки
+сайта.
 
-```powershell
-$f = 'C:\shop-backend\src\admin-app.js'
-$t = Get-Content $f -Raw -Encoding UTF8
-$t = $t.Replace(
-  "import { categoriesRouter } from './routes/categories.js';",
-  "import { adminCategoriesRouter } from './routes/admin-categories.js';`r`nimport { categoriesRouter } from './routes/categories.js';")
-$t = $t.Replace(
-  "  app.use('/categories', categoriesRouter(pool));",
-  "  app.use('/categories', categoriesRouter(pool));`r`n  app.use('/categories', adminCategoriesRouter(pool));")
-[IO.File]::WriteAllText($f, $t, (New-Object Text.UTF8Encoding $false))
-Select-String -Path $f -Pattern 'admin-categories'
+Если в админке приходит `Cannot POST /categories` — сервер не перезапущен
+или строка подключения не встала.
+
+### Руками, если скрипт не подошёл
+
+Положить `admin-categories.js` в `C:\shop-backend\src\routes\` (открыть
+`notepad C:\shop-backend\src\routes\admin-categories.js`, вставить,
+сохранить) и дописать в `src/admin-app.js` две строки — рядом с теми, что
+уже есть про `categoriesRouter`:
+
+```js
+import { adminCategoriesRouter } from './routes/admin-categories.js';
+...
+  app.use('/categories', categoriesRouter(pool));      // уже есть
+  app.use('/categories', adminCategoriesRouter(pool)); // добавить
 ```
 
-Последняя строка должна показать две находки — импорт и подключение. Порядок
-важен: сначала `categoriesRouter` (он отвечает на `GET`), потом наш — он
-подхватывает `POST`, `PATCH` и `DELETE` на том же пути.
-
-**3. Перезапустить админский сервер** (тем же способом, каким он запущен —
-службой или ярлыком) и проверить с самого Windows-компьютера:
-
-```powershell
-$auth = @{ Authorization = 'Basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('admin:ПАРОЛЬ')) }
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3001/categories -Headers $auth `
-  -ContentType 'application/json' -Body '{"name":"Проверка связи"}'
-```
-
-В ответ придёт созданная категория с `id`. После этого её можно удалить из
-админки — или той же командой с `-Method Delete` и `id` в адресе.
-
-Если вместо ответа приходит `Cannot POST /categories` — не подхватилась
-строка подключения из шага 2 или сервер не перезапущен.
+Порядок важен: `GET` забирает первый роутер, `POST`, `PATCH` и `DELETE`
+достаются нашему.
 
 ## Если бэкенд обновят
 
 Обновление от их разработчика перезапишет `src/admin-app.js` и строка
 подключения пропадёт — сам файл `admin-categories.js` останется на месте.
 Признак: в админке перестали создаваться категории, в ответе
-`Cannot POST /categories`. Лечится повторным запуском команды из шага 2.
+`Cannot POST /categories`. Лечится повторным запуском той же команды: она
+видит, что файл на месте, и просто возвращает строку подключения.
 
 Когда эндпоинты появятся у них самих, этот файл надо убрать, а строку из
 `admin-app.js` удалить: два обработчика на одном пути — лишний повод
