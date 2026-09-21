@@ -341,6 +341,12 @@ header {
   flex-wrap: wrap;
 }
 
+/* В шапке остались логотип и поиск. Прижатый к правому краю поиск оставлял
+   пустую половину, поэтому он встаёт по середине свободного места. */
+.header-main .search-bar {
+  margin-inline: auto;
+}
+
 .logo {
   /* The arm takes the top of the mark, so the letters are about half of this */
   --logo-height: 52px;
@@ -370,20 +376,6 @@ header {
 /* The mark is black line art, so a dark ground needs it the other way round */
 .logo-inverted img {
   filter: brightness(0) invert(1);
-}
-
-.header-nav {
-  display: flex;
-  gap: var(--space-lg);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.header-nav > div {
-  cursor: pointer;
-  padding: var(--space-xs) 0;
-  border-bottom: 2px solid transparent;
-  transition: border-color var(--quick) ease, color var(--quick) ease;
 }
 
 /* ===== SEARCH ===== */
@@ -1221,12 +1213,6 @@ header {
   text-decoration: none;
 }
 
-.section-mark-link {
-  text-decoration: none;
-  color: inherit;
-  transition: opacity var(--quick) ease;
-}
-
 .brand-mark {
   display: inline-block;
   max-width: 72px;
@@ -1272,11 +1258,6 @@ header {
   font-size: var(--text-sm);
   font-weight: 620;
   line-height: 1.35;
-}
-
-.tile-count {
-  font-size: var(--text-2xs);
-  color: var(--ink-muted);
 }
 
 /* ===== CATALOGUE LAYOUT ===== */
@@ -2645,11 +2626,6 @@ footer {
   }
 
 
-
-  .section-mark-link:hover {
-    opacity: 0.6;
-  }
-
   .brand-link:hover {
     color: var(--accent-ink);
   }
@@ -2694,10 +2670,6 @@ footer {
 
   .card:hover .card-image img {
     transform: scale(1.03);
-  }
-
-  .header-nav > div:hover {
-    border-bottom-color: var(--accent);
   }
 
   .section-head-bar:hover {
@@ -2879,10 +2851,6 @@ footer {
 
   .product-gallery {
     position: static;
-  }
-
-  .header-nav {
-    display: none;
   }
 
   .hero {

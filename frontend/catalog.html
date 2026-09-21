@@ -10,7 +10,7 @@
   <meta property="og:title" content="Каталог пневматики и автоматики — ROBOT">
   <meta property="og:description" content="Фитинги, пневмоцилиндры, распределители, клапаны, реле и датчики с ценами и характеристиками.">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261017">
+  <link rel="stylesheet" href="css/style.css?v=20261018">
 </head>
 <body>
   <!-- Header -->
@@ -34,10 +34,6 @@
             autocomplete="off">
           <button type="button" class="search-clear" onclick="clearSearch()" title="Очистить">&times;</button>
           <button type="button" class="search-submit" onclick="handleSearch()">НАЙТИ</button>
-        </div>
-
-        <div class="header-nav">
-          <div onclick="window.location.href='catalog.html'" style="border-bottom-color: var(--color-accent);">Каталог</div>
         </div>
       </div>
     </div>
@@ -167,12 +163,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261017"></script>
-  <script src="js/adapter-node.js?v=20261017"></script>
-  <script src="js/api.js?v=20261017"></script>
-  <script src="js/main.js?v=20261017"></script>
-  <script src="js/effects.js?v=20261017"></script>
-  <script src="js/consent.js?v=20261017"></script>
+  <script src="js/config.js?v=20261018"></script>
+  <script src="js/adapter-node.js?v=20261018"></script>
+  <script src="js/api.js?v=20261018"></script>
+  <script src="js/main.js?v=20261018"></script>
+  <script src="js/effects.js?v=20261018"></script>
+  <script src="js/consent.js?v=20261018"></script>
   <script>
     let currentPage = 1;
     let currentFilters = {};
@@ -372,7 +368,6 @@
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
           </span>
           <span class="tile-name">${escapeHtml(child.name)}</span>
-          <span class="tile-count num">${child.total_count}</span>
         </a>`).join('');
     }
 

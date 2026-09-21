@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261017">
+  <link rel="stylesheet" href="css/style.css?v=20261018">
 </head>
 <body>
   <!-- Header -->
@@ -35,10 +35,6 @@
             autocomplete="off">
           <button type="button" class="search-clear" onclick="clearSearch()" title="Очистить">&times;</button>
           <button type="button" class="search-submit" onclick="handleSearch()">НАЙТИ</button>
-        </div>
-
-        <div class="header-nav">
-          <div onclick="window.location.href='catalog.html'">Каталог</div>
         </div>
       </div>
     </div>
@@ -132,12 +128,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261017"></script>
-  <script src="js/adapter-node.js?v=20261017"></script>
-  <script src="js/api.js?v=20261017"></script>
-  <script src="js/main.js?v=20261017"></script>
-  <script src="js/effects.js?v=20261017"></script>
-  <script src="js/consent.js?v=20261017"></script>
+  <script src="js/config.js?v=20261018"></script>
+  <script src="js/adapter-node.js?v=20261018"></script>
+  <script src="js/api.js?v=20261018"></script>
+  <script src="js/main.js?v=20261018"></script>
+  <script src="js/effects.js?v=20261018"></script>
+  <script src="js/consent.js?v=20261018"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -484,21 +480,16 @@
     }
 
     function sectionRow(brand, items, offset) {
-      // The mark is a link when it stands for a real brand: clicking it
-      // shows everything that brand makes. A section's own icon is not a
-      // brand and leads nowhere.
+      // Место под маркой — подпись, а не кнопка: по логотипу бренда уходить
+      // некуда, человек пришёл смотреть раздел
       const inside = brand?.logo
         ? `<img src="${escapeHtml(brand.logo)}" alt="${escapeHtml(brand.name)}" loading="lazy">`
         : brand?.name ? escapeHtml(brand.name) : '';
 
       const classes = 'section-mark'
-        + (brand?.logo ? '' : brand?.name ? ' section-mark-text' : '')
-        + (brand?.id ? ' section-mark-link' : '');
+        + (brand?.logo ? '' : brand?.name ? ' section-mark-text' : '');
 
-      const mark = brand?.id
-        ? `<a class="${classes}" href="catalog.html?brand=${brand.id}"
-              title="Все товары ${escapeHtml(brand.name)}">${inside}</a>`
-        : `<div class="${classes}">${inside}</div>`;
+      const mark = `<div class="${classes}">${inside}</div>`;
 
       return `
         <div class="section-row">
@@ -519,7 +510,6 @@
                  loading="lazy" onerror="this.onerror=null; this.src=NO_IMAGE">
           </span>
           <span class="tile-name">${escapeHtml(category.name)}</span>
-          <span class="tile-count num">${category.total_count}</span>
         </a>`;
     }
 
