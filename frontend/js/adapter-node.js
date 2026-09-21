@@ -577,21 +577,24 @@ const NodeAPI = (() => {
     return (everything = items);
   }
 
-  // Что список товаров знает о категории: фотографию для плитки и какие
-  // бренды в ней лежат. Ноль в наборе — товар без бренда.
+  // Что список товаров знает о категории: фотографию для плитки, какие
+  // бренды в ней лежат и с какого товара она начинается. Ноль в наборе —
+  // товар без бренда.
   function categoryFacts(items) {
     const photo = {};
     const inside = {};
+    const first = {};
 
     items.forEach(item => {
       const id = item.category?.id;
       if (!id) return;
 
       if (item.photo && !photo[id]) photo[id] = withBase(item.photo);
+      if (!first[id]) first[id] = item.id;
       (inside[id] = inside[id] || new Set()).add(brandOf(item.article)?.id || 0);
     });
 
-    return { photo, inside };
+    return { photo, inside, first };
   }
 
   // Фотография — своя или первая найденная в ветке. Бренд — только если он
@@ -604,6 +607,10 @@ const NodeAPI = (() => {
     node.image = facts.photo[node.id]
       || node.children.map(child => child.image).find(Boolean)
       || null;
+
+    // Первый товар раздела. Нужен самому нижнему уровню дерева: там
+    // подкатегория и есть товар, и плитка ведёт сразу в карточку.
+    node.first_product_id = facts.first[node.id] || null;
 
     const single = found.size === 1 ? [...found][0] : 0;
     node.brand_id = single || null;

@@ -231,7 +231,7 @@
 
       // --i staggers the entrance; the animation is in the stylesheet
       grid.innerHTML = tiles.map((child, index) => `
-        <a class="tile tile-enter" href="catalog.html?category=${child.id}"
+        <a class="tile tile-enter" href="${tileHref(child)}"
            style="--i: ${index}">
           <span class="tile-image">
             <img src="${escapeHtml(child.image || NO_IMAGE)}" alt=""
@@ -239,6 +239,21 @@
           </span>
           <span class="tile-name">${escapeHtml(child.name)}</span>
         </a>`).join('');
+    }
+
+    /* Куда ведёт плитка. Обычно — в раздел, но на третьем уровне и глубже
+       подкатегория и есть товар: «Бесконтактные индуктивные датчики» — это
+       одна позиция в четырёх исполнениях. Список из четырёх почти
+       одинаковых карточек там лишний шаг, поэтому плитка открывает первое
+       исполнение, а остальные видны таблицей в самой карточке.
+
+       Верхние два уровня не трогаем: там за плиткой стоят разные товары,
+       и список — то, что нужно. */
+    function tileHref(child) {
+      const deep = (openCategory?.path || []).length >= 2;
+      return deep && !child.has_children && child.first_product_id
+        ? `product.html?id=${child.first_product_id}`
+        : `catalog.html?category=${child.id}`;
     }
 
     async function applyFilters() {
