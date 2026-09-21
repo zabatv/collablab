@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261019">
+  <link rel="stylesheet" href="css/style.css?v=20261020">
 </head>
 <body>
   <!-- Header -->
@@ -128,12 +128,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261019"></script>
-  <script src="js/adapter-node.js?v=20261019"></script>
-  <script src="js/api.js?v=20261019"></script>
-  <script src="js/main.js?v=20261019"></script>
-  <script src="js/effects.js?v=20261019"></script>
-  <script src="js/consent.js?v=20261019"></script>
+  <script src="js/config.js?v=20261020"></script>
+  <script src="js/adapter-node.js?v=20261020"></script>
+  <script src="js/api.js?v=20261020"></script>
+  <script src="js/main.js?v=20261020"></script>
+  <script src="js/effects.js?v=20261020"></script>
+  <script src="js/consent.js?v=20261020"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -350,16 +350,6 @@
       }, FOLD_MS);
     }
 
-    // Закрытая полоса ничего не говорит о том, что за ней, поэтому несёт
-    // первые несколько имён — этого хватает, чтобы решить, открывать ли
-    function sectionHint(category) {
-      const names = (category.children || []).map(child => child.name);
-      if (names.length === 0) return '';
-
-      const shown = names.slice(0, 3).join(' · ');
-      return names.length > 3 ? `${shown} и ещё ${names.length - 3}` : shown;
-    }
-
     // Раздел — полоса, которая сворачивается. На компьютере она стоит
     // открытой, на телефоне закрытой: там из неё получается оглавление,
     // по которому видно весь каталог, не пролистывая его целиком.
@@ -373,9 +363,7 @@
       head.setAttribute('aria-expanded', String(open));
       head.innerHTML = `
         <span class="section-chevron" aria-hidden="true"></span>
-        <span class="section-title">${escapeHtml(category.name)}</span>
-        <span class="section-hint">${escapeHtml(sectionHint(category))}</span>
-        <span class="section-count num">${category.total_count}</span>`;
+        <span class="section-title">${escapeHtml(category.name)}</span>`;
 
       const body = document.createElement('div');
       body.className = 'section-body';
