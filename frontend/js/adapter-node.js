@@ -664,6 +664,7 @@ const NodeAPI = (() => {
 
   async function products(filters = {}) {
     if (filters.brand_id) return byBrand(filters);
+    if (filters.exact_category) return ownProducts(filters);
 
     // Бренды должны быть под рукой раньше товаров: adaptProduct берёт их
     // из уже загруженной карты
@@ -819,6 +820,39 @@ const NodeAPI = (() => {
       walk(findInTree(tree, Number(filters.category_id)));
       list = list.filter(item => branch.has(item.category?.id));
     }
+
+    if (filters.search) {
+      const needle = String(filters.search).toLowerCase();
+      list = list.filter(item =>
+        String(item.name).toLowerCase().includes(needle)
+        || String(item.article).toLowerCase().includes(needle));
+    }
+
+    list = [...list].sort(LOCAL_SORTS[filters.sort] || LOCAL_SORTS.name);
+
+    const perPage = filters.per_page || 24;
+    const page = filters.page || 1;
+
+    return {
+      products: list.slice((page - 1) * perPage, page * perPage).map(adaptProduct),
+      total: list.length,
+      pages: Math.max(1, Math.ceil(list.length / perPage)),
+      current_page: page,
+    };
+  }
+
+  /* Только товары самой категории, без вложенных. Их API так не умеет:
+     параметр category всегда берёт ветку целиком. Страница раздела с
+     подкатегориями просит именно это: то, что лежит в подкатегориях, уже
+     показано плитками выше, и повторять его списком незачем.
+
+     Каталог всё равно загружен целиком — ради плиток и брендов, — поэтому
+     отбор и постраничка делаются здесь, тем же способом, что и для брендов. */
+  async function ownProducts(filters) {
+    const [, items] = await Promise.all([brandMap(), catalogue()]);
+
+    const wanted = Number(filters.exact_category);
+    let list = items.filter(item => item.category?.id === wanted);
 
     if (filters.search) {
       const needle = String(filters.search).toLowerCase();

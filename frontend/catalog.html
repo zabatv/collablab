@@ -131,6 +131,7 @@
     // The whole tree, loaded once; the address bar says which node is open
     let categoryTree = [];
     let openCategory = null;   // the category from ?category=, with path and children
+    let onlyTiles = false;     // раздел показывает подкатегории, без списка товаров
 
     // The brand whose mark was clicked, when the address carries one
     let openBrand = null;
@@ -253,16 +254,31 @@
       };
 
       // The input holds the search term, so picking a filter cannot drop it
-      const query = el('#search-input').value.trim();
-      if (query.length >= 2) {
+      const typed = el('#search-input').value.trim();
+      const query = typed.length >= 2 ? typed : '';
+      if (query) {
         currentFilters.search = query;
       }
 
-      // The backend counts the whole branch, so a section shows its
-      // subcategories' products too
+      /* У раздела с подкатегориями список товаров не нужен: всё, что под
+         ним, уже показано плитками выше, а тот же товар вторым экраном
+         ниже — лишний. Остаются только те, что лежат в самом разделе и ни
+         в одну подкатегорию не попали, — иначе они бы исчезли с сайта.
+         У подкатегории без детей всё как было: её товары и есть страница.
+         Поиск — исключение: он ищет по всей ветке, иначе найденное в
+         подкатегории потерялось бы. */
+      const sectioned = openCategory && !query && (openCategory.children || []).length > 0;
       if (openCategory) {
-        currentFilters.category_id = openCategory.id;
+        if (sectioned) {
+          currentFilters.exact_category = openCategory.id;
+        } else {
+          currentFilters.category_id = openCategory.id;
+        }
       }
+
+      // Своих товаров у раздела нет — списка не будет вовсе, вместе со
+      // скелетами и строкой «Найдено»
+      onlyTiles = Boolean(sectioned) && !openCategory.product_count;
       const brand = currentBrandId();
       if (brand) {
         currentFilters.brand_id = brand;
@@ -271,8 +287,25 @@
       loadProducts();
     }
 
+    /* Страница раздела: плитки подкатегорий и ничего больше. Прячется
+       заодно строка «Найдено» и постраничка — пустая рамка под плитками
+       выглядит поломкой, а не пустотой. */
+    function showResults(visible) {
+      el('.catalog-toolbar').hidden = !visible;
+      el('#products-grid').hidden = !visible;
+      el('#pagination').hidden = !visible;
+    }
+
     async function loadProducts() {
       const grid = el('#products-grid');
+      if (onlyTiles) {
+        showResults(false);
+        grid.innerHTML = '';
+        el('#pagination').innerHTML = '';
+        return;
+      }
+
+      showResults(true);
       renderSkeletons(grid, currentFilters.per_page || 12);
 
       try {

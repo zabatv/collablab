@@ -1490,6 +1490,18 @@ td.ptable-price {
   margin-bottom: var(--space-xl);
 }
 
+/* На странице раздела подкатегории — единственное, что на ней есть:
+   товары ветки уже разложены по ним, и списком не повторяются. Мельчить
+   плитки незачем, экран под них свободен. */
+#subcategory-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 250px));
+  gap: var(--space-md);
+}
+
+#subcategory-grid .tile-name {
+  font-size: var(--text-base);
+}
+
 /* ===== FORMS ===== */
 .form-group {
   display: flex;
@@ -2533,6 +2545,12 @@ footer {
   .tile-grid {
     grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
     gap: var(--space-xs);
+  }
+
+  /* Страница раздела: по две в ряд, во всю ширину экрана */
+  #subcategory-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-sm);
   }
 
   .section-pad {
