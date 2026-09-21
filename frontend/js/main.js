@@ -131,7 +131,7 @@ function productTable(products, currentId = null) {
       <tr${row}>
         <td class="ptable-name">
           ${here
-            ? `<span>${escapeHtml(product.name)}</span>`
+            ? `<span class="ptable-self">${escapeHtml(product.name)}</span>`
             : `<a href="product.html?id=${product.id}">${escapeHtml(product.name)}</a>`}
           ${product.sku ? `<span class="ptable-sku">${escapeHtml(product.sku)}</span>` : ''}
         </td>

@@ -418,11 +418,9 @@
 
         if (data.products.length < 2) return;
 
-        const link = `catalog.html?category=${product.category.id}`;
         host.innerHTML = `
           <div class="line-head">
             <h3>${escapeHtml(product.category.name)}</h3>
-            <a class="category-section-link" href="${link}">Весь раздел</a>
           </div>
           ${productTable(data.products, product.id)}
           ${data.total > data.products.length ? `

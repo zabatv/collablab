@@ -742,12 +742,6 @@ header {
   border-bottom: 1px solid var(--line);
 }
 
-.category-section-link {
-  font-size: var(--text-sm);
-  font-weight: 620;
-  white-space: nowrap;
-}
-
 /* ===== SECTIONS AND TILES =====
    A section is a bar that folds. It stands open, showing what is under it as
    names and photographs, so the first screen of the catalogue is a list of
@@ -1253,8 +1247,9 @@ header {
   }
 }
 
-.ptable-name a {
-  font-weight: 620;
+.ptable-name a,
+.ptable-name .ptable-self {
+  font-weight: 700;
   color: var(--ink);
   line-height: 1.4;
 }
@@ -1271,10 +1266,6 @@ header {
 /* Строка того товара, на странице которого стоит таблица */
 .ptable tbody tr.ptable-here {
   background: var(--surface-sunken);
-}
-
-.ptable-here .ptable-name {
-  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* В таблице наличие и так выделено цветом и словом — кружок перед каждой
@@ -2415,10 +2406,6 @@ footer {
   .product-thumbnail:hover {
     border-color: var(--line-strong);
   }
-
-  .category-section-link:hover {
-    text-decoration: underline;
-  }
 }
 
 /* ===== TOUCH TARGETS =====
@@ -2444,11 +2431,6 @@ footer {
   .header-top a {
     display: inline-block;
     padding: 6px 0;
-  }
-
-  .category-section-link {
-    display: inline-block;
-    padding: 10px 0;
   }
 
   .pagination button {
