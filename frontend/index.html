@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261020">
+  <link rel="stylesheet" href="css/style.css?v=20261021">
 </head>
 <body>
   <!-- Header -->
@@ -53,8 +53,9 @@
     </div>
   </section>
 
-  <!-- Hero Section -->
-  <section class="hero" id="hero">
+  <!-- Опорный блок. Спрятан до ответа о слайдах: иначе он успевает
+       нарисоваться и тут же исчезнуть, уступив место слайдеру. -->
+  <section class="hero" id="hero" hidden>
     <div class="container">
       <div class="hero-content">
         <h1>Пневматика и автоматика со склада</h1>
@@ -128,12 +129,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261020"></script>
-  <script src="js/adapter-node.js?v=20261020"></script>
-  <script src="js/api.js?v=20261020"></script>
-  <script src="js/main.js?v=20261020"></script>
-  <script src="js/effects.js?v=20261020"></script>
-  <script src="js/consent.js?v=20261020"></script>
+  <script src="js/config.js?v=20261021"></script>
+  <script src="js/adapter-node.js?v=20261021"></script>
+  <script src="js/api.js?v=20261021"></script>
+  <script src="js/main.js?v=20261021"></script>
+  <script src="js/effects.js?v=20261021"></script>
+  <script src="js/consent.js?v=20261021"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -195,21 +196,30 @@
     let slideTimer = null;
     let slideCount = 0;
 
+    const showHero = () => { el('#hero').hidden = false; };
+
     async function loadSlider() {
       let banners = [];
       try {
-        banners = await ProductAPI.getBanners();
+        /* Ответа ждём недолго: молчащий сервис не должен держать главную
+           пустой. Не ответил за две секунды — считаем, что слайдов нет, и
+           показываем опорный блок; слайдер после этого уже не подменит его. */
+        banners = await Promise.race([
+          ProductAPI.getBanners(),
+          new Promise(resolve => setTimeout(() => resolve(null), 2000)),
+        ]);
       } catch (error) {
-        // No slides is the normal state of a new site, and a slider that
-        // cannot load must not take the page down with it
+        // Пустой слайдер — обычное состояние нового сайта, и упасть из-за
+        // него страница не должна
         console.error('Error loading banners:', error);
+      }
+
+      if (!banners || !banners.length) {
+        showHero();
         return;
       }
 
-      if (!banners.length) return;
-
-      // The slides replace the opening block rather than pushing it down
-      el('#hero').hidden = true;
+      // Слайды встают на место опорного блока, а не сдвигают его вниз
       el('#slider-wrap').hidden = false;
       slideCount = banners.length;
 
