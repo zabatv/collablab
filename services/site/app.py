@@ -86,6 +86,15 @@ NAME_LIMIT = 60
 # Откуда брать товары для разбора каталога. Внутри туннеля, без пароля.
 CATALOG_API = os.getenv('CATALOG_API', 'http://10.8.0.2:3000').rstrip('/')
 
+# База каталога, напрямую. Нужна ровно для одного: заводить и править
+# категории. В их API этого нет — только чтение (docs/api-contract.md), — а
+# раскладывать ассортимент по полкам заказчик должен сам, не дожидаясь
+# правок на той стороне. Пусто — раздел категорий в админке остаётся
+# read-only и честно об этом говорит.
+#
+#     CATALOG_DB=postgresql://shop:пароль@10.8.0.2:5432/shop
+CATALOG_DB = os.getenv('CATALOG_DB', '').strip()
+
 # Что считается непорядком в карточке товара
 DESCRIPTION_MIN = 120
 TITLE_MIN = 15
@@ -250,6 +259,24 @@ class SearchQuery(db.Model):
     searched_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+# Кириллица в адресе категории читается плохо и ломается при копировании,
+# поэтому slug пишется латиницей. Он нужен только для уникальности: сайт
+# строит адреса по id.
+TRANSLIT = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',
+    'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'c',
+    'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e',
+    'ю': 'yu', 'я': 'ya',
+}
+
+
+def slugify(text):
+    latin = ''.join(TRANSLIT.get(letter, letter) for letter in str(text).lower())
+    clean = re.sub(r'-+', '-', re.sub(r'[^a-z0-9]+', '-', latin)).strip('-')
+    return clean[:80] or 'category'
+
+
 def loose(article):
     """Артикул без регистра, пробелов и знаков.
 
@@ -411,6 +438,202 @@ def set_product_specs(article):
     row.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify(row.to_dict())
+
+
+# ===== категории в их базе =====
+
+"""Заводить и править категории приходится в обход их API: там их только
+читают. Таблица у них обычная — id, name, slug, parent_id, — и вложенность
+держит любую, поэтому третий уровень работает без правок на той стороне.
+
+Соединение открывается на запрос и закрывается сразу: правят категории
+раз в неделю, держать ради этого постоянный коннект к чужой базе незачем."""
+
+
+def catalog_db():
+    if not CATALOG_DB:
+        return None
+    import psycopg2
+    return psycopg2.connect(CATALOG_DB, connect_timeout=5)
+
+
+def needs_db(view):
+    """Без адреса базы раздел не работает — и говорит, чего не хватает."""
+    @wraps(view)
+    def guarded(*args, **kwargs):
+        if not CATALOG_DB:
+            return jsonify({'error': 'Сервису не задан адрес базы каталога '
+                                     '(CATALOG_DB) — категории менять нечем'}), 503
+        try:
+            return view(*args, **kwargs)
+        except Refuse as error:
+            return jsonify({'error': str(error)}), 400
+        except Exception as error:
+            # В их таблице имя уникально в пределах родителя. Свою проверку
+            # мы делаем раньше, но гонка двух вкладок обойдёт её — тогда
+            # откажет сама база, и человеку это надо сказать словами.
+            if error.__class__.__name__ == 'UniqueViolation':
+                return jsonify({'error': 'Категория с таким именем '
+                                         'в этом разделе уже есть'}), 400
+            app.logger.exception('Категории: запрос к базе не удался')
+            return jsonify({'error': 'База каталога не отвечает или отказала '
+                                     'в запросе'}), 502
+    return guarded
+
+
+class Refuse(Exception):
+    """Отказ, который можно показать человеку как есть"""
+    said_out_loud = True
+
+
+def category_rows(cursor):
+    cursor.execute('SELECT id, name, parent_id FROM categories ORDER BY name')
+    return [{'id': row[0], 'name': row[1], 'parent_id': row[2]}
+            for row in cursor.fetchall()]
+
+
+def free_slug(cursor, base):
+    """Уникальный slug. Адреса на сайте строятся по id, так что достаточно,
+    чтобы он ни с чем не совпал."""
+    cursor.execute('SELECT 1 FROM categories WHERE slug = %s', (base,))
+    if not cursor.fetchone():
+        return base
+    return f'{base}-{secrets.token_hex(3)}'
+
+
+def check_free(cursor, parent_id, name, skip_id=None):
+    """Тёзка в том же разделе — почти всегда опечатка, а не замысел.
+
+    Сравнение делается здесь, а не запросом: lower() в PostgreSQL зависит от
+    локали базы и при locale=C кириллицу не сворачивает вовсе — «Реле» и
+    «реле» прошли бы как разные. casefold в Python не зависит ни от чего."""
+    cursor.execute(
+        'SELECT id, name FROM categories WHERE parent_id IS NOT DISTINCT FROM %s',
+        (parent_id,))
+
+    wanted = name.casefold()
+    for other_id, other_name in cursor.fetchall():
+        if other_id == skip_id:
+            continue
+        if ' '.join(str(other_name).split()).casefold() == wanted:
+            where = 'в этом разделе' if parent_id else 'на верхнем уровне'
+            raise Refuse(f'«{other_name}» уже есть {where}')
+
+
+def check_parent(cursor, parent_id):
+    if parent_id is None:
+        return
+    cursor.execute('SELECT 1 FROM categories WHERE id = %s', (parent_id,))
+    if not cursor.fetchone():
+        raise Refuse('Раздел, в который переносим, не найден')
+
+
+def branch_ids(cursor, category_id):
+    """Категория и всё, что под ней. Нужно, чтобы не перенести раздел внутрь
+    самого себя: дерево замкнулось бы кольцом и пропало со страницы."""
+    found, edge = {category_id}, [category_id]
+    while edge:
+        cursor.execute('SELECT id FROM categories WHERE parent_id = ANY(%s)', (edge,))
+        edge = [row[0] for row in cursor.fetchall() if row[0] not in found]
+        found.update(edge)
+    return found
+
+
+def clean_category_name(raw):
+    name = ' '.join(str(raw or '').split())
+    if not name:
+        raise Refuse('Название категории не может быть пустым')
+    if len(name) > 100:
+        raise Refuse('Название длиннее 100 символов')
+    return name
+
+
+def wanted_parent(data, field='parent_id'):
+    value = data.get(field)
+    if value in (None, '', 0, '0'):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise Refuse('Неверный раздел')
+
+
+@app.route('/admin/categories', methods=['POST'])
+@require_admin
+@needs_db
+def create_category():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Ожидался JSON с полем name'}), 400
+
+    name = clean_category_name(data.get('name'))
+    parent_id = wanted_parent(data)
+
+    connection = catalog_db()
+    try:
+        with connection, connection.cursor() as cursor:
+            check_parent(cursor, parent_id)
+            check_free(cursor, parent_id, name)
+
+            cursor.execute(
+                'INSERT INTO categories (name, slug, parent_id) VALUES (%s, %s, %s)'
+                ' RETURNING id',
+                (name, free_slug(cursor, slugify(name)), parent_id))
+            new_id = cursor.fetchone()[0]
+    finally:
+        connection.close()
+
+    return jsonify({'id': new_id, 'name': name, 'parent_id': parent_id}), 201
+
+
+@app.route('/admin/categories/<int:category_id>', methods=['PUT', 'DELETE'])
+@require_admin
+@needs_db
+def change_category(category_id):
+    connection = catalog_db()
+    try:
+        with connection, connection.cursor() as cursor:
+            cursor.execute('SELECT name, parent_id FROM categories WHERE id = %s',
+                           (category_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise Refuse('Категория не найдена')
+
+            if request.method == 'DELETE':
+                cursor.execute('SELECT count(*) FROM categories WHERE parent_id = %s',
+                               (category_id,))
+                if cursor.fetchone()[0]:
+                    raise Refuse('Сначала удалите или перенесите подкатегории')
+
+                cursor.execute('SELECT count(*) FROM products WHERE category_id = %s',
+                               (category_id,))
+                inside = cursor.fetchone()[0]
+                if inside:
+                    raise Refuse(f'В категории {inside} товаров — '
+                                 'перенесите их в другую категорию')
+
+                cursor.execute('DELETE FROM categories WHERE id = %s', (category_id,))
+                return '', 204
+
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                raise Refuse('Ожидался JSON')
+
+            name = clean_category_name(data.get('name', row[0]))
+            parent_id = wanted_parent(data) if 'parent_id' in data else row[1]
+
+            if parent_id is not None and parent_id in branch_ids(cursor, category_id):
+                raise Refuse('Раздел нельзя перенести внутрь самого себя')
+
+            check_parent(cursor, parent_id)
+            check_free(cursor, parent_id, name, skip_id=category_id)
+
+            cursor.execute('UPDATE categories SET name = %s, parent_id = %s WHERE id = %s',
+                           (name, parent_id, category_id))
+    finally:
+        connection.close()
+
+    return jsonify({'id': category_id, 'name': name, 'parent_id': parent_id})
 
 
 @app.route('/docs/<path:article>')

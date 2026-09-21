@@ -323,7 +323,8 @@ const AdminAPI = {
   },
 
   createCategory: (data) => {
-    if (ON_NODE) return NodeAPI.missing('Создания категорий');
+    // На их бэкенде категории пишет наш сервис, напрямую в базу каталога
+    if (ON_NODE) return NodeAPI.createCategory(data);
 
     const headers = authHeader();
     return apiCall('/admin/categories', {
@@ -335,7 +336,7 @@ const AdminAPI = {
 
   // Rename a category, or move it under another one
   updateCategory: (id, data) => {
-    if (ON_NODE) return NodeAPI.missing('Изменения категорий');
+    if (ON_NODE) return NodeAPI.updateCategory(id, data);
 
     const headers = authHeader();
     return apiCall(`/admin/categories/${id}`, {
@@ -346,7 +347,7 @@ const AdminAPI = {
   },
 
   deleteCategory: (id) => {
-    if (ON_NODE) return NodeAPI.missing('Удаления категорий');
+    if (ON_NODE) return NodeAPI.deleteCategory(id);
 
     const headers = authHeader();
     return apiCall(`/admin/categories/${id}`, {

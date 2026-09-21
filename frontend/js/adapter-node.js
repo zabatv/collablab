@@ -703,6 +703,20 @@ const NodeAPI = (() => {
     });
   }
 
+  /* ---------- категории ---------- */
+
+  /* В их API категории только читают. Заводить и править их должен
+     заказчик, поэтому запись идёт через наш сервис, а он — прямо в их
+     базу. Читается дерево по-прежнему из их API. */
+  const createCategory = (data) =>
+    callSite('/admin/categories', { method: 'POST', body: data });
+
+  const updateCategory = (id, data) =>
+    callSite(`/admin/categories/${id}`, { method: 'PUT', body: data });
+
+  const deleteCategory = (id) =>
+    callSite(`/admin/categories/${id}`, { method: 'DELETE' });
+
   /* ---------- документация ---------- */
 
   /* Паспорт, чертёж, каталог производителя. Их медиа принимает только
@@ -950,7 +964,7 @@ const NodeAPI = (() => {
     banners, adminBanners, updateBanner, deleteBanner, reorderBanners,
     trackView, trackSearch, seoTraffic, seoCatalog, siteBase, create1c,
     categoryTexts, saveCategoryText, productSpecs, saveProductSpecs,
-    lastChange, linkedTo1c,
+    lastChange, linkedTo1c, createCategory, updateCategory, deleteCategory,
     productDocs, uploadProductDoc, renameProductDoc, deleteProductDoc,
     brandsAdmin, createBrand, updateBrand, deleteBrand, clearBrandLogo,
     setBrandRules, previewRules, forgetBrands, articlesInCategory,
