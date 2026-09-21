@@ -1390,12 +1390,22 @@ td.ptable-price {
   margin: 0;
 }
 
+/* По этой таблице выбирают исполнение, а не сверяются мельком: набор
+   тем же кеглем, что и остальной текст страницы */
 #product-line .ptable {
-  font-size: var(--text-xs);
+  font-size: var(--text-base);
 }
 
 #product-line .ptable td {
-  padding: 10px 8px;
+  padding: 12px 8px;
+}
+
+#product-line .ptable th {
+  font-size: var(--text-xs);
+}
+
+#product-line .ptable-sku {
+  font-size: var(--text-xs);
 }
 
 @container product-line (max-width: 560px) {
