@@ -11,7 +11,7 @@
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
   <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261021">
+  <link rel="stylesheet" href="css/style.css?v=20261022">
 </head>
 <body>
   <!-- Header -->
@@ -129,12 +129,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261021"></script>
-  <script src="js/adapter-node.js?v=20261021"></script>
-  <script src="js/api.js?v=20261021"></script>
-  <script src="js/main.js?v=20261021"></script>
-  <script src="js/effects.js?v=20261021"></script>
-  <script src="js/consent.js?v=20261021"></script>
+  <script src="js/config.js?v=20261022"></script>
+  <script src="js/adapter-node.js?v=20261022"></script>
+  <script src="js/api.js?v=20261022"></script>
+  <script src="js/main.js?v=20261022"></script>
+  <script src="js/effects.js?v=20261022"></script>
+  <script src="js/consent.js?v=20261022"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -158,7 +158,7 @@
 
         clear(sections);
         filled.forEach(section =>
-          renderSection(sections, section, sectionStartsOpen(section.id)));
+          renderSection(sections, section, sectionStartsOpen()));
       } catch (error) {
         console.error('Error loading content:', error);
         sections.innerHTML = '<div class="empty-state"><p>Не удалось загрузить товары. Проверьте, запущен ли сервер.</p></div>';
@@ -295,46 +295,17 @@
     // Сколько длится сворачивание. Должно совпадать с --unfold в стилях.
     const FOLD_MS = 340;
 
-    /* ---------- что оставили свёрнутым ----------
-       Только идентификаторы разделов и только в этом браузере. Приватный
-       режим и запрет на данные сайта бросают исключение, а каталог должен
-       открыться в любом случае. */
-    const FOLD_KEY = 'folded-sections';   // что закрыли на большом экране
-    const OPEN_KEY = 'opened-sections';   // что открыли на телефоне
-
     /* На большом экране разделы стоят открытыми: каталог сразу показывает,
        что в нём есть, а полоса нужна, чтобы убрать лишнее. На телефоне
        наоборот — одиннадцать открытых разделов превращают главную в ленту
        на семнадцать экранов, и до нужного не долистать. */
     const onPhone = () => window.matchMedia('(max-width: 640px)').matches;
 
-    function storedSet(key) {
-      try {
-        const stored = JSON.parse(localStorage.getItem(key) || '[]');
-        return new Set(Array.isArray(stored) ? stored : []);
-      } catch (error) {
-        return new Set();
-      }
-    }
-
-    function sectionStartsOpen(id) {
-      return onPhone() ? storedSet(OPEN_KEY).has(id) : !storedSet(FOLD_KEY).has(id);
-    }
-
-    function rememberFold(id, open) {
-      // На телефоне запоминается открытое, на большом экране — закрытое:
-      // помнить стоит то, что расходится с обычным видом страницы
-      const key = onPhone() ? OPEN_KEY : FOLD_KEY;
-      const listed = storedSet(key);
-
-      (onPhone() ? open : !open) ? listed.add(id) : listed.delete(id);
-
-      try {
-        localStorage.setItem(key, JSON.stringify([...listed]));
-      } catch (error) {
-        // Запоминание — удобство; потеря его ничего не меняет
-      }
-    }
+    /* Что свернули, страница нарочно не запоминает. Память приводила к
+       тому, что человек один раз закрыл раздел на компьютере — и главная
+       у него так и открывалась закрытой, хотя должна открытой. Каждый
+       заход начинается одинаково: на ПК развёрнуто, на телефоне свёрнуто. */
+    const sectionStartsOpen = () => !onPhone();
 
     /* Открывает или закрывает раздел, разгоняя высоту от той, что сейчас, к
        той, что будет. Одним CSS это делается переходом строки грида между
@@ -391,7 +362,6 @@
         // знать до того, как начнётся разворот
         if (nowOpen) fillSection(inner, category);
         foldSection(head, body, inner, nowOpen);
-        rememberFold(category.id, nowOpen);
       });
 
       section.append(head, body);
