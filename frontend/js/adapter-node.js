@@ -705,17 +705,25 @@ const NodeAPI = (() => {
 
   /* ---------- категории ---------- */
 
-  /* В их API категории только читают. Заводить и править их должен
-     заказчик, поэтому запись идёт через наш сервис, а он — прямо в их
-     базу. Читается дерево по-прежнему из их API. */
+  /* Их админский сервер: POST/PATCH/DELETE /categories
+     (docs/backend/admin-categories.js). Дерево читается оттуда же. */
+
+  // Форма админки шлёт всё разом, включая description и brand_id. У их
+  // категории таких полей нет, а на лишнее она отвечает 400 — описание
+  // живёт в нашем сервисе и сохраняется отдельной кнопкой.
+  const categoryFields = (data) => ({
+    name: data.name,
+    parent_id: data.parent_id || null,
+  });
+
   const createCategory = (data) =>
-    callSite('/admin/categories', { method: 'POST', body: data });
+    readAdmin('/categories', { method: 'POST', body: categoryFields(data) });
 
   const updateCategory = (id, data) =>
-    callSite(`/admin/categories/${id}`, { method: 'PUT', body: data });
+    readAdmin(`/categories/${id}`, { method: 'PATCH', body: categoryFields(data) });
 
   const deleteCategory = (id) =>
-    callSite(`/admin/categories/${id}`, { method: 'DELETE' });
+    readAdmin(`/categories/${id}`, { method: 'DELETE' });
 
   /* ---------- документация ---------- */
 

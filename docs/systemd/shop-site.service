@@ -25,11 +25,6 @@ Environment=ADMIN_PASSWORD=ЗАМЕНИТЕ_ПАРОЛЬ
 # запроса браузера и передаётся дальше).
 Environment=CATALOG_API=http://10.8.0.2:3000
 Environment=ADMIN_API=http://10.8.0.2:3001
-# База каталога напрямую — только ради категорий: в их API их лишь
-# читают, а раскладывать ассортимент по полкам должен заказчик. Как
-# открыть базу в туннель, написано в docs/deploy-robots07.md. Без этой
-# строки всё остальное работает, а категории остаются только для чтения.
-Environment=CATALOG_DB=postgresql://shop:ЗАМЕНИТЕ_ПАРОЛЬ_БАЗЫ@10.8.0.2:5432/shop
 ExecStart=/var/www/collablab/.venv/bin/gunicorn --preload -w 2 -b 127.0.0.1:5001 app:app
 Restart=always
 User=www-data
