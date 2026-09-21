@@ -1864,23 +1864,23 @@ td.ptable-price {
   border-bottom: 1px solid var(--line);
 }
 
+/* Колонкой во всю ширину, а не марками: это чертёж и схема подключения,
+   по ним читают размеры и номера выводов. В квадратике 160 пикселей от
+   такой картинки нет никакого толку. */
 .shared-photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 220px));
-  justify-content: start;
-  gap: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  max-width: 900px;
 }
 
 .shared-photo-grid a {
   display: flex;
-  align-items: center;
   justify-content: center;
-  aspect-ratio: 1;
-  padding: var(--space-xs);
+  padding: var(--space-sm);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--surface-sunken);
-  overflow: hidden;
+  background: var(--surface);
   transition: border-color var(--quick) ease;
 }
 
@@ -1888,11 +1888,16 @@ td.ptable-price {
   border-color: var(--line-strong);
 }
 
+/* Размер по самой картинке: широкий чертёж занимает всю ширину, а
+   квадратная схема не разворачивается на весь экран — потолок по высоте
+   держит блок в пределах одного взгляда. Полный размер — по щелчку. */
 .shared-photo-grid img {
+  display: block;
   max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  mix-blend-mode: multiply;
+  max-height: 520px;
+  width: auto;
+  height: auto;
+  border-radius: var(--radius-sm);
 }
 
 /* ---------- документация ---------- */
