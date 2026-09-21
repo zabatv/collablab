@@ -450,10 +450,22 @@ def set_product_specs(article):
 раз в неделю, держать ради этого постоянный коннект к чужой базе незачем."""
 
 
+class Refuse(Exception):
+    """Отказ, который можно показать человеку как есть"""
+    said_out_loud = True
+
+
 def catalog_db():
     if not CATALOG_DB:
         return None
-    import psycopg2
+    try:
+        import psycopg2
+    except ImportError:
+        # Драйвер ставится отдельно; без него сообщение «база не отвечает»
+        # отправило бы искать поломку не там
+        raise Refuse('На сервере не установлен драйвер PostgreSQL: '
+                     'выполните pip install -r services/site/requirements.txt '
+                     'и перезапустите shop-site')
     return psycopg2.connect(CATALOG_DB, connect_timeout=5)
 
 
@@ -479,11 +491,6 @@ def needs_db(view):
             return jsonify({'error': 'База каталога не отвечает или отказала '
                                      'в запросе'}), 502
     return guarded
-
-
-class Refuse(Exception):
-    """Отказ, который можно показать человеку как есть"""
-    said_out_loud = True
 
 
 def category_rows(cursor):
