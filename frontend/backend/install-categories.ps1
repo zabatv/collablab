@@ -63,7 +63,9 @@ if ($text -match 'admin-categories') {
 }
 
 Step 'Проверяю'
-$found = Select-String -Path $appFile -Pattern 'admin-categories' | Measure-Object
+# именно adminCategoriesRouter: это слово есть и в импорте, и в подключении,
+# а «admin-categories» — только в пути импорта
+$found = Select-String -Path $appFile -Pattern 'adminCategoriesRouter' | Measure-Object
 if ($found.Count -eq 2) { Good 'Импорт и подключение на месте' } else { Bad "Ожидал две строки, нашёл $($found.Count)" }
 
 Write-Host "`nОсталось перезапустить сервер админки (порт 3001) — тем же способом, каким он запущен." -ForegroundColor Yellow
