@@ -994,8 +994,11 @@ header {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 14px var(--space-md);
-  background: var(--ink);
+  padding: 15px var(--space-md);
+  /* Плоская чёрная плашка читается как дыра в странице. Лёгкий градиент и
+     волосок света по верху делают из неё поверхность, на которую нажимают. */
+  background: linear-gradient(180deg, #23262d 0%, var(--ink) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
   color: #fff;
   font-size: var(--text-md);
   font-weight: 650;
@@ -1010,24 +1013,6 @@ header {
    разворот успевает начаться */
 .section-head-bar:active {
   transform: scale(0.994);
-}
-
-/* Волосок акцента под полосой, рисуется только у открытого раздела */
-.section-head-bar::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--accent);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform var(--unfold) var(--ease-out);
-}
-
-.section-head-bar[aria-expanded="true"]::after {
-  transform: scaleX(1);
 }
 
 .section-title {
@@ -1058,24 +1043,27 @@ header {
 
 .section-count {
   flex: none;
-  padding: 3px 9px;
+  padding: 4px 10px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 /* Смотрит вправо у закрытого раздела и вниз у открытого — единственное,
    чем полоса показывает своё состояние */
 .section-chevron {
   flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.1);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   position: relative;
   transition: background-color var(--quick) ease, transform var(--unfold) var(--ease-out);
 }
@@ -1379,6 +1367,12 @@ header {
 
 .ptable-here .ptable-name {
   box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* В таблице наличие и так выделено цветом и словом — кружок перед каждой
+   строкой только рябит в столбце из двадцати позиций */
+.ptable .stock::before {
+  display: none;
 }
 
 /* Артикул под названием: искать по нему приходят чаще, чем по имени */
@@ -2673,11 +2667,12 @@ footer {
   }
 
   .section-head-bar:hover {
-    background: #22262d;
+    background: linear-gradient(180deg, #2b2f38 0%, #1b1e24 100%);
   }
 
   .section-head-bar:hover .section-chevron {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.24);
   }
 
   .search-bar input:hover {
