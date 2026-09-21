@@ -10,8 +10,8 @@
   <meta property="og:title" content="ROBOT — пневматика, фитинги и автоматика">
   <meta property="og:description" content="Пневмоцилиндры, фитинги, распределители, клапаны, реле и датчики со склада.">
   <meta property="og:type" content="website">
-  <link rel="icon" href="img/favicon.png" type="image/png">
-  <link rel="stylesheet" href="css/style.css?v=20261024">
+  <link rel="icon" href="img/favicon.png?v=20261025" type="image/png">
+  <link rel="stylesheet" href="css/style.css?v=20261025">
 </head>
 <body>
   <!-- Header -->
@@ -129,12 +129,12 @@
     </div>
   </footer>
 
-  <script src="js/config.js?v=20261024"></script>
-  <script src="js/adapter-node.js?v=20261024"></script>
-  <script src="js/api.js?v=20261024"></script>
-  <script src="js/main.js?v=20261024"></script>
-  <script src="js/effects.js?v=20261024"></script>
-  <script src="js/consent.js?v=20261024"></script>
+  <script src="js/config.js?v=20261025"></script>
+  <script src="js/adapter-node.js?v=20261025"></script>
+  <script src="js/api.js?v=20261025"></script>
+  <script src="js/main.js?v=20261025"></script>
+  <script src="js/effects.js?v=20261025"></script>
+  <script src="js/consent.js?v=20261025"></script>
   <script>
     const PRODUCTS_PER_SECTION = 8;
 
@@ -379,10 +379,6 @@
         inner.innerHTML = `
           <div class="section-pad">
             ${brandRows(category)}
-            <a class="section-all" href="catalog.html?category=${category.id}">
-              Все ${category.total_count} товаров раздела
-              <span class="section-all-arrow" aria-hidden="true">→</span>
-            </a>
           </div>`;
         return;
       }
@@ -400,13 +396,6 @@
         const data = await ProductAPI.getProducts({
           category_id: category.id, per_page: PRODUCTS_PER_SECTION });
         grid.innerHTML = data.products.map(createProductCard).join('');
-
-        const all = document.createElement('a');
-        all.className = 'section-all';
-        all.href = `catalog.html?category=${category.id}`;
-        all.innerHTML = `Все ${category.total_count} товаров раздела
-          <span class="section-all-arrow" aria-hidden="true">→</span>`;
-        pad.appendChild(all);
       } catch (error) {
         grid.innerHTML = '<p class="text-muted">Не удалось загрузить товары</p>';
       }

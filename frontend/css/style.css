@@ -1063,19 +1063,6 @@ header {
   padding: var(--space-md);
 }
 
-.section-all {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: var(--space-md);
-  font-size: var(--text-sm);
-  font-weight: 620;
-}
-
-.section-all-arrow {
-  transition: transform var(--settle) var(--ease-out);
-}
-
 /* Tiles keep their size instead of stretching to fill the row. A brand with
    two subcategories would otherwise show two enormous tiles beside a brand
    showing six small ones, and the rows would not read as one table. */
@@ -1285,6 +1272,11 @@ header {
 
 .ptable-name a:hover {
   color: var(--accent);
+}
+
+/* Строка целиком кликается, поэтому и курсор об этом говорит */
+.ptable tbody tr[data-href] {
+  cursor: pointer;
 }
 
 /* Строка того товара, на странице которого стоит таблица */
@@ -1514,110 +1506,6 @@ td.ptable-price {
 
 #subcategories {
   margin-bottom: var(--space-xl);
-}
-
-/* ===== CATALOGUE TREE =====
-   Sections fold open in place, so a buyer can walk down to a subcategory
-   without losing sight of where the rest of the catalogue is. */
-.cat-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.cat-tree-all {
-  padding: 6px var(--space-xs);
-  margin: 0 calc(var(--space-xs) * -1);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--ink-soft);
-  text-decoration: none;
-}
-
-.cat-tree-all.active {
-  background: var(--ink);
-  color: var(--surface);
-}
-
-.cat-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3xs);
-  padding: 4px var(--space-xs) 4px 0;
-  margin: 0 calc(var(--space-xs) * -1) 0 0;
-  border-radius: var(--radius-sm);
-}
-
-.cat-row.active {
-  background: var(--accent-wash);
-}
-
-.cat-row.active .cat-link {
-  color: var(--accent);
-  font-weight: 650;
-}
-
-/* The chevron is the only thing that folds; the name always navigates */
-.cat-toggle {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-  position: relative;
-  border-radius: var(--radius-sm);
-}
-
-.cat-toggle::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid var(--ink-muted);
-  border-bottom: 1.5px solid var(--ink-muted);
-  transform: translateX(-1px) rotate(-45deg);
-  transition: transform var(--quick) ease;
-}
-
-.cat-toggle[aria-expanded="true"]::before {
-  transform: translateY(-2px) rotate(45deg);
-}
-
-.cat-toggle-empty {
-  cursor: default;
-}
-
-.cat-toggle-empty::before {
-  display: none;
-}
-
-.cat-link {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--text-sm);
-  line-height: 1.35;
-  color: var(--ink-soft);
-  text-decoration: none;
-}
-
-.cat-count {
-  flex: none;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--text-2xs);
-  color: var(--ink-muted);
-}
-
-/* Subcategories sit under a hairline, so the nesting reads at a glance */
-.cat-children {
-  margin-left: 10px;
-  padding-left: var(--space-xs);
-  border-left: 1px solid var(--line);
 }
 
 /* ===== FILTERS ===== */
@@ -2542,27 +2430,11 @@ footer {
   }
 
 
-  .section-all:hover .section-all-arrow {
-    transform: translateX(3px);
-  }
-
   /* The tile is already white on a sunken panel, so hover draws its edge
      instead of repainting the face */
   .tile:hover {
     border-color: var(--line-strong);
     box-shadow: var(--shadow-md);
-  }
-
-  .cat-row:hover {
-    background: var(--surface-sunken);
-  }
-
-  .cat-row:hover .cat-link {
-    color: var(--accent-ink);
-  }
-
-  .cat-toggle:hover::before {
-    border-color: var(--ink);
   }
 
   .variant:not(.variant-current):hover {
@@ -2661,17 +2533,6 @@ footer {
 
   .search-bar {
     height: 46px;
-  }
-
-  /* The chevron and the category name sit side by side, so both need
-     room enough that a thumb hits the one it aimed at */
-  .cat-toggle {
-    width: 34px;
-    height: 34px;
-  }
-
-  .cat-link {
-    padding: 6px 0;
   }
 
   /* The strip's phone number is the one thing on it worth tapping */

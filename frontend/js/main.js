@@ -120,8 +120,15 @@ function productTable(products, currentId = null) {
     // сбивает с толку, поэтому строка просто отмечена
     const here = product.id === currentId;
 
+    // Строка целиком ведёт на товар: попасть в неё пальцем легче, чем в
+    // название. Ссылка на названии остаётся — её открывают в новой
+    // вкладке, по ней же ходят поисковики.
+    const row = here
+      ? ' class="ptable-here" aria-current="true"'
+      : ` data-href="product.html?id=${product.id}"`;
+
     return `
-      <tr${here ? ' class="ptable-here" aria-current="true"' : ''}>
+      <tr${row}>
         <td class="ptable-name">
           ${here
             ? `<span>${escapeHtml(product.name)}</span>`
@@ -147,6 +154,24 @@ function productTable(products, currentId = null) {
       <tbody>${rows}</tbody>
     </table>`;
 }
+
+/* Щелчок по строке таблицы товаров. Слушатель один на страницу и висит
+   на документе: строки перерисовываются, и вешать обработчик на каждую
+   заново — лишняя работа на каждый ответ сервера. */
+document.addEventListener('click', (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const row = target.closest('.ptable tbody tr[data-href]');
+  if (!row) return;
+
+  // По самой ссылке браузер перейдёт сам — со всеми своими средней
+  // кнопкой и «открыть в новой вкладке». Выделение текста тоже не повод
+  // уводить со страницы.
+  if (target.closest('a') || String(window.getSelection() || '')) return;
+
+  window.location.href = row.dataset.href;
+});
 
 // Placeholders hold the grid's shape while the request is in flight
 function renderSkeletons(container, count = 8) {
